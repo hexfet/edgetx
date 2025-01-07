@@ -19,16 +19,17 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _SIMULCD_H_
-#define _SIMULCD_H_
+#pragma once
 
-#include "opentx_types.h"
+#include "edgetx_types.h"
 #include "lcd.h"
 
 extern int g_snapshot_idx;
 extern bool simuLcdRefresh;
 
+#if defined(COLORLCD)
+extern pixel_t* simuLcdBuf;
+#else
 extern pixel_t simuLcdBuf[DISPLAY_BUFFER_SIZE];
 extern pixel_t displayBuf[DISPLAY_BUFFER_SIZE];
-
-#endif // _SIMULCD_H_
+#endif

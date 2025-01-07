@@ -19,12 +19,19 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _SBUS_H_
-#define _SBUS_H_
+#pragma once
+
+#include "hal/serial_driver.h"
 
 #define SBUS_BAUDRATE         100000
-#define SBUS_FRAME_SIZE       25
 
-void processSbusInput();
+// SBUS serial driver + context
+void sbusSetReceiveCtx(void* ctx, const etx_serial_driver_t* drv);
 
-#endif // _SBUS_H_
+// SBUS AUX idle callback
+void sbusAuxFrameReceived(void* param);
+
+// Enable / disable SBUS AUX
+void sbusAuxSetEnabled(bool enabled);
+
+void sbusFrameReceived(void* param);

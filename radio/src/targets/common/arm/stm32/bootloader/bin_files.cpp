@@ -19,9 +19,16 @@
  * GNU General Public License for more details.
  */
 
-#include "opentx.h"
+#include <strings.h>
+#include <memory.h>
+
 #include "boot.h"
+#include "board.h"
+#include "sdcard.h"
 #include "bin_files.h"
+#include "fw_version.h"
+#include "strhelpers.h"
+#include "hal/storage.h"
 
 // 'private'
 static DIR  dir;
@@ -32,6 +39,22 @@ BinFileInfo binFiles[MAX_BIN_FILES];
 uint8_t     Block_buffer[BLOCK_LEN];
 UINT        BlockCount;
 
+void sdInit(void)
+{
+  storageInit();
+
+  static FATFS fatFS __DMA;
+  if (f_mount(&fatFS, "", 1) == FR_OK) {
+    f_chdir("/");
+  }
+}
+
+void sdDone()
+{
+  // unmount
+  f_mount(nullptr, "", 0);
+  storageDeInit();
+}
 
 FRESULT openBinDir(MemoryType mt)
 {
@@ -50,6 +73,10 @@ static FRESULT findNextBinFile(FILINFO* fno)
 
     if (fr != FR_OK || fno->fname[0] == 0)
       break;
+    if (fno->fattrib & (AM_HID | AM_SYS | AM_DIR))
+      continue;  // Skip folders and hidden files
+    if (fno->fname[0] == '.' && fno->fname[1] != '.')
+      continue;  // Ignore hidden files under UNIX, but not ..
 
     int32_t len = strlen(fno->fname) - 4;
     if (len < 0)

@@ -6,6 +6,7 @@
     <file>images/screenshot.png</file>
     <file>images/splash.png</file>
     <file>images/companion-title.png</file>
+    <file>images/simulator-title.png</file>
     <file>images/maps.png</file>
     <file>images/track.png</file>
     <file>images/track0.png</file>
@@ -46,222 +47,6 @@
     <file>images/simulator/icons/svg/trainer-active.svg</file>
     <file>images/simulator/icons/svg/word_wrap.svg</file>
     <file>images/simulator/icons/svg/word_wrap-on.svg</file>
-    <file>images/simulator/X12/middle.png</file>
-    <file>images/simulator/X12/left.png</file>
-    <file>images/simulator/X12/right.png</file>
-    <file>images/simulator/X12/top.png</file>
-    <file>images/simulator/X12/bottom.png</file>
-    <file>images/simulator/X12/led.png</file>
-    <file>images/simulator/X12/border-right.png</file>
-    <file>images/simulator/X12/left_btn1.png</file>
-    <file>images/simulator/X12/left_btn2.png</file>
-    <file>images/simulator/X12/left_scrnsht.png</file>
-    <file>images/simulator/X12/right_btnU.png</file>
-    <file>images/simulator/X12/right_btnL.png</file>
-    <file>images/simulator/X12/right_btnD.png</file>
-    <file>images/simulator/X12/right_btnR.png</file>
-    <file>images/simulator/X12/right_ent.png</file>
-    <file>images/simulator/X10/left.png</file>
-    <file>images/simulator/X10/right.png</file>
-    <file>images/simulator/X10/top.png</file>
-    <file>images/simulator/X10/bottom.png</file>
-    <file>images/simulator/X10/left_mdl.png</file>
-    <file>images/simulator/X10/left_page.png</file>
-    <file>images/simulator/X10/left_scrnsht.png</file>
-    <file>images/simulator/X10/left_rtn.png</file>
-    <file>images/simulator/X10/left_sys.png</file>
-    <file>images/simulator/X10/left_tele.png</file>
-    <file>images/simulator/X10/right_ent.png</file>
-    <file>images/simulator/9X/9xdb.png</file>
-    <file>images/simulator/9X/9xdl.png</file>
-    <file>images/simulator/9X/9xdr.png</file>
-    <file>images/simulator/9X/9xdt.png</file>
-    <file>images/simulator/9X/9xdb-bl.png</file>
-    <file>images/simulator/9X/9xdl-bl.png</file>
-    <file>images/simulator/9X/9xdr-bl.png</file>
-    <file>images/simulator/9X/9xdt-bl.png</file>
-    <file>images/simulator/9X/9xdb-gr.png</file>
-    <file>images/simulator/9X/9xdl-gr.png</file>
-    <file>images/simulator/9X/9xdr-gr.png</file>
-    <file>images/simulator/9X/9xdt-gr.png</file>
-    <file>images/simulator/9X/9xdb-or.png</file>
-    <file>images/simulator/9X/9xdl-or.png</file>
-    <file>images/simulator/9X/9xdr-or.png</file>
-    <file>images/simulator/9X/9xdt-or.png</file>
-    <file>images/simulator/9X/9xdb-yl.png</file>
-    <file>images/simulator/9X/9xdl-yl.png</file>
-    <file>images/simulator/9X/9xdr-yl.png</file>
-    <file>images/simulator/9X/9xdt-yl.png</file>
-    <file>images/simulator/9X/9xdb-rd.png</file>
-    <file>images/simulator/9X/9xdl-rd.png</file>
-    <file>images/simulator/9X/9xdr-rd.png</file>
-    <file>images/simulator/9X/9xdt-rd.png</file>
-    <file>images/simulator/9X/9xmenu.png</file>
-    <file>images/simulator/9X/9xmenumenu.png</file>
-    <file>images/simulator/9X/9xmenuexit.png</file>
-    <file>images/simulator/9X/9xcurs.png</file>
-    <file>images/simulator/9X/9xcursup.png</file>
-    <file>images/simulator/9X/9xcursplus.png</file>
-    <file>images/simulator/9X/9xcursmin.png</file>
-    <file>images/simulator/9X/9xcursdown.png</file>
-    <file>images/simulator/9X/9xcursphoto.png</file>
-    <file>images/simulator/X9D/x9b0.png</file>
-    <file>images/simulator/X9D/x9l0.png</file>
-    <file>images/simulator/X9D/x9l1.png</file>
-    <file>images/simulator/X9D/x9l2.png</file>
-    <file>images/simulator/X9D/x9l3.png</file>
-    <file>images/simulator/X9D/x9l4.png</file>
-    <file>images/simulator/X9D/x9r0.png</file>
-    <file>images/simulator/X9D/x9r1.png</file>
-    <file>images/simulator/X9D/x9r2.png</file>
-    <file>images/simulator/X9D/x9r3.png</file>
-    <file>images/simulator/X9D/x9s0.png</file>
-    <file>images/simulator/X9D/x9t0.png</file>
-    <file>images/simulator/X7/bottom.png</file>
-    <file>images/simulator/X7/left.png</file>
-    <file>images/simulator/X7/left_exit.png</file>
-    <file>images/simulator/X7/left_menu.png</file>
-    <file>images/simulator/X7/left_page.png</file>
-    <file>images/simulator/X7/left_scrnshot.png</file>
-    <file>images/simulator/X7/right.png</file>
-    <file>images/simulator/X7/right_ent.png</file>
-    <file>images/simulator/X7/top.png</file>
-    <file>images/simulator/X9E/bottom.png</file>
-    <file>images/simulator/X9E/left.png</file>
-    <file>images/simulator/X9E/left_exit.png</file>
-    <file>images/simulator/X9E/left_menu.png</file>
-    <file>images/simulator/X9E/left_page.png</file>
-    <file>images/simulator/X9E/left_scrnshot.png</file>
-    <file>images/simulator/X9E/right.png</file>
-    <file>images/simulator/X9E/right_enter.png</file>
-    <file>images/simulator/X9E/top.png</file>
-    <file>images/simulator/X9D2019/bottom.png</file>
-    <file>images/simulator/X9D2019/bottom_scrnshot.png</file>
-    <file>images/simulator/X9D2019/left.png</file>
-    <file>images/simulator/X9D2019/left_exit.png</file>
-    <file>images/simulator/X9D2019/left_menu.png</file>
-    <file>images/simulator/X9D2019/left_page.png</file>
-    <file>images/simulator/X9D2019/right.png</file>
-    <file>images/simulator/X9D2019/right_enter.png</file>
-    <file>images/simulator/X9D2019/top.png</file>
-    <file>images/simulator/X9LITE/bottom.png</file>
-    <file>images/simulator/X9LITE/left.png</file>
-    <file>images/simulator/X9LITE/left_exit.png</file>
-    <file>images/simulator/X9LITE/left_menu.png</file>
-    <file>images/simulator/X9LITE/left_page.png</file>
-    <file>images/simulator/X9LITE/left_scrnshot.png</file>
-    <file>images/simulator/X9LITE/right.png</file>
-    <file>images/simulator/X9LITE/right_ent.png</file>
-    <file>images/simulator/X9LITE/top.png</file>
-    <file>images/simulator/XLITE/bottom.png</file>
-    <file>images/simulator/XLITE/left.png</file>
-    <file>images/simulator/XLITE/left_scrnshot.png</file>
-    <file>images/simulator/XLITE/right.png</file>
-    <file>images/simulator/XLITE/right_ent.png</file>
-    <file>images/simulator/XLITE/top.png</file>
-    <file>images/simulator/XLITE/right_exit.png</file>
-    <file>images/simulator/XLITE/right_shift.png</file>
-    <file>images/simulator/XLITE/right_right.png</file>
-    <file>images/simulator/XLITE/right_left.png</file>
-    <file>images/simulator/XLITE/right_up.png</file>
-    <file>images/simulator/XLITE/right_down.png</file>
-    <file>images/simulator/JumperT12/right_up.png</file>
-    <file>images/simulator/JumperT12/right_down.png</file>
-    <file>images/simulator/JumperT12/right_right.png</file>
-    <file>images/simulator/JumperT12/right_left.png</file>
-    <file>images/simulator/JumperT12/left_ent.png</file>
-    <file>images/simulator/JumperT12/left_exit.png</file>
-    <file>images/simulator/JumperT12/JumperT12.png</file>
-    <file>images/simulator/JumperT12/JumperT12-208.png</file>
-    <file>images/simulator/JumperT12/JumperT12-left.png</file>
-    <file>images/simulator/JumperT12/JumperT12-right.png</file>
-    <file>images/simulator/JumperT12/JumperT12-x.png</file>
-    <file>images/simulator/JumperT12/JumperT12-center.png</file>
-    <file>images/simulator/JumperT12/JumperT12-top.png</file>
-    <file>images/simulator/JumperTLITE/bottom.png</file>
-    <file>images/simulator/JumperTLITE/bottom_right.png</file>
-    <file>images/simulator/JumperTLITE/bottom_left.png</file>
-    <file>images/simulator/JumperTLITE/left.png</file>
-    <file>images/simulator/JumperTLITE/left_top.png</file>
-    <file>images/simulator/JumperTLITE/left_bottom.png</file>
-    <file>images/simulator/JumperTLITE/right.png</file>
-    <file>images/simulator/JumperTLITE/right_top.png</file>
-    <file>images/simulator/JumperTLITE/right_bottom.png</file>
-    <file>images/simulator/JumperTLITE/top.png</file>
-    <file>images/simulator/JumperTPRO/bottom.png</file>
-    <file>images/simulator/JumperTPRO/left.png</file>
-    <file>images/simulator/JumperTPRO/right.png</file>
-    <file>images/simulator/JumperTPRO/top.png</file>
-    <file>images/simulator/TX12/left.png</file>
-    <file>images/simulator/TX12/left-pageup.png</file>
-    <file>images/simulator/TX12/left-pagedn.png</file>
-    <file>images/simulator/TX12/left-rtn.png</file>
-    <file>images/simulator/TX12/left-sys.png</file>
-    <file>images/simulator/TX12/left-tele.png</file>
-    <file>images/simulator/TX12/right.png</file>
-    <file>images/simulator/TX12/right-ent.png</file>
-    <file>images/simulator/TX12/right-mdl.png</file>
-    <file>images/simulator/TX12/bottom.png</file>
-    <file>images/simulator/TX12/top.png</file>
-    <file>images/simulator/Zorro/left.png</file>
-    <file>images/simulator/Zorro/left-pageup.png</file>
-    <file>images/simulator/Zorro/left-pagedn.png</file>
-    <file>images/simulator/Zorro/left-rtn.png</file>
-    <file>images/simulator/Zorro/left-sys.png</file>
-    <file>images/simulator/Zorro/right-tele.png</file>
-    <file>images/simulator/Zorro/right.png</file>
-    <file>images/simulator/Zorro/right-ent.png</file>
-    <file>images/simulator/Zorro/right-mdl.png</file>
-    <file>images/simulator/Zorro/bottom.png</file>
-    <file>images/simulator/Zorro/top.png</file>
-    <file>images/simulator/T8/left.png</file>
-    <file>images/simulator/T8/left-pageup.png</file>
-    <file>images/simulator/T8/left-pagedn.png</file>
-    <file>images/simulator/T8/left-rtn.png</file>
-    <file>images/simulator/T8/left-sys.png</file>
-    <file>images/simulator/T8/right.png</file>
-    <file>images/simulator/T8/right-ent.png</file>
-    <file>images/simulator/T8/right-mdl.png</file>
-    <file>images/simulator/T8/right-up.png</file>
-    <file>images/simulator/T8/right-dn.png</file>
-    <file>images/simulator/T8/bottom.png</file>
-    <file>images/simulator/T8/top.png</file>
-    <file>images/simulator/JumperT16/left.png</file>
-    <file>images/simulator/JumperT16/right.png</file>
-    <file>images/simulator/JumperT16/top.png</file>
-    <file>images/simulator/JumperT16/bottom.png</file>
-    <file>images/simulator/JumperT16/left_mdl.png</file>
-    <file>images/simulator/JumperT16/left_page.png</file>
-    <file>images/simulator/JumperT16/left_scrnsht.png</file>
-    <file>images/simulator/JumperT16/left_sys.png</file>
-    <file>images/simulator/JumperT16/left_tele.png</file>
-    <file>images/simulator/JumperT16/right_ent.png</file>
-    <file>images/simulator/JumperT16/right_rtn.png</file>
-    <file>images/simulator/JumperT18/left.png</file>
-    <file>images/simulator/JumperT18/right.png</file>
-    <file>images/simulator/JumperT18/top.png</file>
-    <file>images/simulator/JumperT18/bottom.png</file>
-    <file>images/simulator/JumperT18/left_mdl.png</file>
-    <file>images/simulator/JumperT18/left_page.png</file>
-    <file>images/simulator/JumperT18/left_sys.png</file>
-    <file>images/simulator/JumperT18/left_tele.png</file>
-    <file>images/simulator/JumperT18/right_ent.png</file>
-    <file>images/simulator/JumperT18/right_rtn.png</file>
-    <file>images/simulator/TX16S/left.png</file>
-    <file>images/simulator/TX16S/right.png</file>
-    <file>images/simulator/TX16S/top.png</file>
-    <file>images/simulator/TX16S/bottom.png</file>
-    <file>images/simulator/TX16S/left_page.png</file>
-    <file>images/simulator/TX16S/left_page2.png</file>
-    <file>images/simulator/TX16S/left_rtn.png</file>
-    <file>images/simulator/TX16S/left_sys.png</file>
-    <file>images/simulator/TX16S/left_tele.png</file>
-    <file>images/simulator/TX16S/right_ent.png</file>
-    <file>images/simulator/TX16S/right_mdl.png</file>
-    <file>images/simulator/NV14/left.png</file>
-    <file>images/simulator/NV14/right.png</file>
-    <file>images/simulator/NV14/top.png</file>
-    <file>images/simulator/NV14/bottom.png</file>
     <file>images/wizard/ailerons.png</file>
     <file>images/wizard/airbrakes.png</file>
     <file>images/wizard/elevons.png</file>
@@ -395,7 +180,7 @@
     <file>themes/monochrome/16/compare.png</file>
     <file>themes/monochrome/16/saveas.png</file>
     <file>themes/monochrome/16/apppreferences.png</file>
-    <file>themes/monochrome/16/fwpreferences.png</file>
+    <file>themes/monochrome/16/download.png</file>
     <file>themes/monochrome/16/movedown.png</file>
     <file>themes/monochrome/16/currentmodel.png</file>
     <file>themes/monochrome/16/read_flash.png</file>
@@ -439,7 +224,7 @@
     <file>themes/monochrome/24/compare.png</file>
     <file>themes/monochrome/24/saveas.png</file>
     <file>themes/monochrome/24/apppreferences.png</file>
-    <file>themes/monochrome/24/fwpreferences.png</file>
+    <file>themes/monochrome/24/download.png</file>
     <file>themes/monochrome/24/movedown.png</file>
     <file>themes/monochrome/24/currentmodel.png</file>
     <file>themes/monochrome/24/read_flash.png</file>
@@ -483,7 +268,7 @@
     <file>themes/monochrome/32/compare.png</file>
     <file>themes/monochrome/32/saveas.png</file>
     <file>themes/monochrome/32/apppreferences.png</file>
-    <file>themes/monochrome/32/fwpreferences.png</file>
+    <file>themes/monochrome/32/download.png</file>
     <file>themes/monochrome/32/movedown.png</file>
     <file>themes/monochrome/32/currentmodel.png</file>
     <file>themes/monochrome/32/read_flash.png</file>
@@ -527,7 +312,7 @@
     <file>themes/monochrome/48/compare.png</file>
     <file>themes/monochrome/48/saveas.png</file>
     <file>themes/monochrome/48/apppreferences.png</file>
-    <file>themes/monochrome/48/fwpreferences.png</file>
+    <file>themes/monochrome/48/download.png</file>
     <file>themes/monochrome/48/movedown.png</file>
     <file>themes/monochrome/48/currentmodel.png</file>
     <file>themes/monochrome/48/read_flash.png</file>
@@ -571,7 +356,7 @@
     <file>themes/classic/16/compare.png</file>
     <file>themes/classic/16/saveas.png</file>
     <file>themes/classic/16/apppreferences.png</file>
-    <file>themes/classic/16/fwpreferences.png</file>
+    <file>themes/classic/16/download.png</file>
     <file>themes/classic/16/movedown.png</file>
     <file>themes/classic/16/currentmodel.png</file>
     <file>themes/classic/16/read_flash.png</file>
@@ -615,7 +400,7 @@
     <file>themes/classic/24/compare.png</file>
     <file>themes/classic/24/saveas.png</file>
     <file>themes/classic/24/apppreferences.png</file>
-    <file>themes/classic/24/fwpreferences.png</file>
+    <file>themes/classic/24/download.png</file>
     <file>themes/classic/24/movedown.png</file>
     <file>themes/classic/24/currentmodel.png</file>
     <file>themes/classic/24/read_flash.png</file>
@@ -659,7 +444,7 @@
     <file>themes/classic/32/compare.png</file>
     <file>themes/classic/32/saveas.png</file>
     <file>themes/classic/32/apppreferences.png</file>
-    <file>themes/classic/32/fwpreferences.png</file>
+    <file>themes/classic/32/download.png</file>
     <file>themes/classic/32/movedown.png</file>
     <file>themes/classic/32/currentmodel.png</file>
     <file>themes/classic/32/read_flash.png</file>
@@ -703,7 +488,7 @@
     <file>themes/classic/48/compare.png</file>
     <file>themes/classic/48/saveas.png</file>
     <file>themes/classic/48/apppreferences.png</file>
-    <file>themes/classic/48/fwpreferences.png</file>
+    <file>themes/classic/48/download.png</file>
     <file>themes/classic/48/movedown.png</file>
     <file>themes/classic/48/currentmodel.png</file>
     <file>themes/classic/48/read_flash.png</file>
@@ -747,7 +532,7 @@
     <file>themes/monoblue/16/compare.png</file>
     <file>themes/monoblue/16/saveas.png</file>
     <file>themes/monoblue/16/apppreferences.png</file>
-    <file>themes/monoblue/16/fwpreferences.png</file>
+    <file>themes/monoblue/16/download.png</file>
     <file>themes/monoblue/16/movedown.png</file>
     <file>themes/monoblue/16/currentmodel.png</file>
     <file>themes/monoblue/16/read_flash.png</file>
@@ -791,7 +576,7 @@
     <file>themes/monoblue/24/compare.png</file>
     <file>themes/monoblue/24/saveas.png</file>
     <file>themes/monoblue/24/apppreferences.png</file>
-    <file>themes/monoblue/24/fwpreferences.png</file>
+    <file>themes/monoblue/24/download.png</file>
     <file>themes/monoblue/24/movedown.png</file>
     <file>themes/monoblue/24/currentmodel.png</file>
     <file>themes/monoblue/24/read_flash.png</file>
@@ -835,7 +620,7 @@
     <file>themes/monoblue/32/compare.png</file>
     <file>themes/monoblue/32/saveas.png</file>
     <file>themes/monoblue/32/apppreferences.png</file>
-    <file>themes/monoblue/32/fwpreferences.png</file>
+    <file>themes/monoblue/32/download.png</file>
     <file>themes/monoblue/32/movedown.png</file>
     <file>themes/monoblue/32/currentmodel.png</file>
     <file>themes/monoblue/32/read_flash.png</file>
@@ -879,7 +664,7 @@
     <file>themes/monoblue/48/compare.png</file>
     <file>themes/monoblue/48/saveas.png</file>
     <file>themes/monoblue/48/apppreferences.png</file>
-    <file>themes/monoblue/48/fwpreferences.png</file>
+    <file>themes/monoblue/48/download.png</file>
     <file>themes/monoblue/48/movedown.png</file>
     <file>themes/monoblue/48/currentmodel.png</file>
     <file>themes/monoblue/48/read_flash.png</file>
@@ -923,7 +708,7 @@
     <file>themes/monowhite/16/compare.png</file>
     <file>themes/monowhite/16/saveas.png</file>
     <file>themes/monowhite/16/apppreferences.png</file>
-    <file>themes/monowhite/16/fwpreferences.png</file>
+    <file>themes/monowhite/16/download.png</file>
     <file>themes/monowhite/16/movedown.png</file>
     <file>themes/monowhite/16/currentmodel.png</file>
     <file>themes/monowhite/16/read_flash.png</file>
@@ -967,7 +752,7 @@
     <file>themes/monowhite/24/compare.png</file>
     <file>themes/monowhite/24/saveas.png</file>
     <file>themes/monowhite/24/apppreferences.png</file>
-    <file>themes/monowhite/24/fwpreferences.png</file>
+    <file>themes/monowhite/24/download.png</file>
     <file>themes/monowhite/24/movedown.png</file>
     <file>themes/monowhite/24/currentmodel.png</file>
     <file>themes/monowhite/24/read_flash.png</file>
@@ -1011,7 +796,7 @@
     <file>themes/monowhite/32/compare.png</file>
     <file>themes/monowhite/32/saveas.png</file>
     <file>themes/monowhite/32/apppreferences.png</file>
-    <file>themes/monowhite/32/fwpreferences.png</file>
+    <file>themes/monowhite/32/download.png</file>
     <file>themes/monowhite/32/movedown.png</file>
     <file>themes/monowhite/32/currentmodel.png</file>
     <file>themes/monowhite/32/read_flash.png</file>
@@ -1055,7 +840,7 @@
     <file>themes/monowhite/48/compare.png</file>
     <file>themes/monowhite/48/saveas.png</file>
     <file>themes/monowhite/48/apppreferences.png</file>
-    <file>themes/monowhite/48/fwpreferences.png</file>
+    <file>themes/monowhite/48/download.png</file>
     <file>themes/monowhite/48/movedown.png</file>
     <file>themes/monowhite/48/currentmodel.png</file>
     <file>themes/monowhite/48/read_flash.png</file>
@@ -1099,7 +884,7 @@
     <file>themes/yerico/16/compare.png</file>
     <file>themes/yerico/16/saveas.png</file>
     <file>themes/yerico/16/apppreferences.png</file>
-    <file>themes/yerico/16/fwpreferences.png</file>
+    <file>themes/yerico/16/download.png</file>
     <file>themes/yerico/16/movedown.png</file>
     <file>themes/yerico/16/currentmodel.png</file>
     <file>themes/yerico/16/read_flash.png</file>
@@ -1143,7 +928,7 @@
     <file>themes/yerico/24/compare.png</file>
     <file>themes/yerico/24/saveas.png</file>
     <file>themes/yerico/24/apppreferences.png</file>
-    <file>themes/yerico/24/fwpreferences.png</file>
+    <file>themes/yerico/24/download.png</file>
     <file>themes/yerico/24/movedown.png</file>
     <file>themes/yerico/24/currentmodel.png</file>
     <file>themes/yerico/24/read_flash.png</file>
@@ -1187,7 +972,7 @@
     <file>themes/yerico/32/compare.png</file>
     <file>themes/yerico/32/saveas.png</file>
     <file>themes/yerico/32/apppreferences.png</file>
-    <file>themes/yerico/32/fwpreferences.png</file>
+    <file>themes/yerico/32/download.png</file>
     <file>themes/yerico/32/movedown.png</file>
     <file>themes/yerico/32/currentmodel.png</file>
     <file>themes/yerico/32/read_flash.png</file>
@@ -1231,7 +1016,7 @@
     <file>themes/yerico/48/compare.png</file>
     <file>themes/yerico/48/saveas.png</file>
     <file>themes/yerico/48/apppreferences.png</file>
-    <file>themes/yerico/48/fwpreferences.png</file>
+    <file>themes/yerico/48/download.png</file>
     <file>themes/yerico/48/movedown.png</file>
     <file>themes/yerico/48/currentmodel.png</file>
     <file>themes/yerico/48/read_flash.png</file>
@@ -1242,20 +1027,39 @@
     <file>themes/yerico/48/stop.png</file>
     <file>themes/yerico/48/write_eeprom.png</file>
     <file>themes/yerico/48/sdsync.png</file>
+    <file>sounds/0.wav</file>
+    <file>sounds/1.wav</file>
+    <file>sounds/2.wav</file>
+    <file>sounds/3.wav</file>
+    <file>sounds/4.wav</file>
+    <file>sounds/5.wav</file>
+    <file>sounds/6.wav</file>
+    <file>sounds/7.wav</file>
+    <file>sounds/8.wav</file>
+    <file>sounds/9.wav</file>
+    <file>sounds/10.wav</file>
+    <file>sounds/11.wav</file>
+    <file>sounds/12.wav</file>
+    <file>sounds/13.wav</file>
+    <file>sounds/14.wav</file>
+    <file>sounds/15.wav</file>
   </qresource>
   <qresource prefix="/layouts/">
-    <file alias="mask_layout1p2.png">../../radio/src/gui/colorlcd/layouts/mask_layout1+2.png</file>
-    <file alias="mask_layout1p3.png">../../radio/src/gui/colorlcd/layouts/mask_layout1+3.png</file>
-    <file alias="mask_layout1x1.png">../../radio/src/gui/colorlcd/layouts/mask_layout1x1.png</file>
-    <file alias="mask_layout1x2.png">../../radio/src/gui/colorlcd/layouts/mask_layout1x2.png</file>
-    <file alias="mask_layout1x3.png">../../radio/src/gui/colorlcd/layouts/mask_layout1x3.png</file>
-    <file alias="mask_layout1x4.png">../../radio/src/gui/colorlcd/layouts/mask_layout1x4.png</file>
-    <file alias="mask_layout2p1.png">../../radio/src/gui/colorlcd/layouts/mask_layout2+1.png</file>
-    <file alias="mask_layout2p3.png">../../radio/src/gui/colorlcd/layouts/mask_layout2+3.png</file>
-    <file alias="mask_layout2x1.png">../../radio/src/gui/colorlcd/layouts/mask_layout2x1.png</file>
-    <file alias="mask_layout2x2.png">../../radio/src/gui/colorlcd/layouts/mask_layout2x2.png</file>
-    <file alias="mask_layout2x3.png">../../radio/src/gui/colorlcd/layouts/mask_layout2x3.png</file>
-    <file alias="mask_layout2x4.png">../../radio/src/gui/colorlcd/layouts/mask_layout2x4.png</file>
-    <file alias="mask_layout4p2.png">../../radio/src/gui/colorlcd/layouts/mask_layout4+2.png</file>
+    <file alias="mask_layout1p2.png">images/layouts/mask_layout1+2.png</file>
+    <file alias="mask_layout1p3.png">images/layouts/mask_layout1+3.png</file>
+    <file alias="mask_layout1p4.png">images/layouts/mask_layout1+4.png</file>
+    <file alias="mask_layout1x1.png">images/layouts/mask_layout1x1.png</file>
+    <file alias="mask_layout1x1am.png">images/layouts/mask_layout1x1.png</file>
+    <file alias="mask_layout1x2.png">images/layouts/mask_layout1x2.png</file>
+    <file alias="mask_layout1x3.png">images/layouts/mask_layout1x3.png</file>
+    <file alias="mask_layout1x4.png">images/layouts/mask_layout1x4.png</file>
+    <file alias="mask_layout2p1.png">images/layouts/mask_layout2+1.png</file>
+    <file alias="mask_layout2p3.png">images/layouts/mask_layout2+3.png</file>
+    <file alias="mask_layout2x1.png">images/layouts/mask_layout2x1.png</file>
+    <file alias="mask_layout2x2.png">images/layouts/mask_layout2x2.png</file>
+    <file alias="mask_layout2x3.png">images/layouts/mask_layout2x3.png</file>
+    <file alias="mask_layout2x4.png">images/layouts/mask_layout2x4.png</file>
+    <file alias="mask_layout4p2.png">images/layouts/mask_layout4+2.png</file>
+    <file alias="mask_layout4p2b.png">images/layouts/mask_layout4+2b.png</file>
   </qresource>
 </RCC>

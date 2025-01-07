@@ -19,253 +19,204 @@
  * GNU General Public License for more details.
  */
 
-#include "opentx.h"
+#include "stm32_hal.h"
+#include "stm32_hal_ll.h"
+#include "stm32_gpio.h"
+#include "stm32_ws2812.h"
 
 #include "hal/adc_driver.h"
+#include "hal/trainer_driver.h"
+#include "hal/switch_driver.h"
+#include "hal/rotary_encoder.h"
+#include "hal/usb_driver.h"
+#include "hal/gpio.h"
+#include "hal/rgbleds.h"
 
-#if !defined(PCBX12S)
-  #include "../common/arm/stm32/stm32_hal_adc.h"
-  #define ADC_DRIVER stm32_hal_adc_driver
-#else
-  #include "x12s_adc_driver.h"
-  #define ADC_DRIVER x12s_adc_driver
+#include "board.h"
+#include "boards/generic_stm32/module_ports.h"
+#include "boards/generic_stm32/intmodule_heartbeat.h"
+#include "boards/generic_stm32/analog_inputs.h"
+#include "boards/generic_stm32/rgb_leds.h"
+
+#include "timers_driver.h"
+#include "dataconstants.h"
+#include "edgetx_types.h"
+#include "globals.h"
+#include "sdcard.h"
+#include "debug.h"
+
+#include <string.h>
+
+#if defined(FLYSKY_GIMBAL)
+  #include "flysky_gimbal_driver.h"
 #endif
 
-#if defined(__cplusplus)
-extern "C" {
+#if defined(CSD203_SENSOR)
+  #include "csd203_sensor.h"
 #endif
-#include "usb_dcd_int.h"
-#include "usb_bsp.h"
-#if defined(__cplusplus)
+
+#if defined(LED_STRIP_GPIO)
+// Common LED driver
+extern const stm32_pulse_timer_t _led_timer;
+
+void ledStripOff()
+{
+  for (uint8_t i = 0; i < LED_STRIP_LENGTH; i++) {
+    ws2812_set_color(i, 0, 0, 0);
+  }
+  ws2812_update(&_led_timer);
 }
 #endif
-
-extern void flysky_hall_stick_check_init(void);
-extern void flysky_hall_stick_init(void);
-extern void flysky_hall_stick_loop( void );
 
 HardwareOptions hardwareOptions;
 bool boardBacklightOn = false;
 
-void watchdogInit(unsigned int duration)
-{
-  IWDG->KR = 0x5555;      // Unlock registers
-  IWDG->PR = 3;           // Divide by 32 => 1kHz clock
-  IWDG->KR = 0x5555;      // Unlock registers
-  IWDG->RLR = duration;
-  IWDG->KR = 0xAAAA;      // reload
-  IWDG->KR = 0xCCCC;      // start
-}
+#if defined(VIDEO_SWITCH)
+#include "videoswitch_driver.h"
 
-#if defined(AUX_SERIAL_PWR_GPIO)
-void auxSerialPowerOn()
+void boardBLInit()
 {
-  GPIO_SetBits(AUX_SERIAL_PWR_GPIO, AUX_SERIAL_PWR_GPIO_PIN);
-}
-
-void auxSerialPowerOff()
-{
-  GPIO_ResetBits(AUX_SERIAL_PWR_GPIO, AUX_SERIAL_PWR_GPIO_PIN);
-}
-#endif
-#if defined(AUX2_SERIAL_PWR_GPIO)
-void aux2SerialPowerOn()
-{
-  GPIO_SetBits(AUX2_SERIAL_PWR_GPIO, AUX2_SERIAL_PWR_GPIO_PIN);
-}
-
-void aux2SerialPowerOff()
-{
-  GPIO_ResetBits(AUX2_SERIAL_PWR_GPIO, AUX2_SERIAL_PWR_GPIO_PIN);
+  videoSwitchInit();
 }
 #endif
 
+#if !defined(BOOT)
+#include "edgetx.h"
 
-#if HAS_SPORT_UPDATE_CONNECTOR()
-void sportUpdateInit()
+#if defined(SIXPOS_SWITCH_INDEX)
+uint8_t lastADCState = 0;
+uint8_t sixPosState = 0;
+bool dirty = true;
+uint16_t getSixPosAnalogValue(uint16_t adcValue)
 {
-  GPIO_InitTypeDef GPIO_InitStructure;
-  GPIO_InitStructure.GPIO_Pin = SPORT_UPDATE_PWR_GPIO_PIN;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-  GPIO_Init(SPORT_UPDATE_PWR_GPIO, &GPIO_InitStructure);
-}
-
-void sportUpdatePowerOn()
-{
-  GPIO_SetBits(SPORT_UPDATE_PWR_GPIO, SPORT_UPDATE_PWR_GPIO_PIN);
-}
-
-void sportUpdatePowerOff()
-{
-  GPIO_ResetBits(SPORT_UPDATE_PWR_GPIO, SPORT_UPDATE_PWR_GPIO_PIN);
-}
-
-void sportUpdatePowerInit()
-{
-  if (g_eeGeneral.sportUpdatePower == 1)
-    sportUpdatePowerOn();
-  else
-    sportUpdatePowerOff();
+  uint8_t currentADCState = 0;
+  if (adcValue > 3800)
+    currentADCState = 6;
+  else if (adcValue > 3100)
+    currentADCState = 5;
+  else if (adcValue > 2300)
+    currentADCState = 4;
+  else if (adcValue > 1500)
+    currentADCState = 3;
+  else if (adcValue > 1000)
+    currentADCState = 2;
+  else if (adcValue > 400)
+    currentADCState = 1;
+  if (lastADCState != currentADCState) {
+    lastADCState = currentADCState;
+  } else if (lastADCState != 0 && lastADCState - 1 != sixPosState) {
+    sixPosState = lastADCState - 1;
+    dirty = true;
+  }
+  if (dirty) {
+    for (uint8_t i = 0; i < 6; i++) {
+      if (i == sixPosState)
+        ws2812_set_color(i, SIXPOS_LED_RED, SIXPOS_LED_GREEN, SIXPOS_LED_BLUE);
+      else
+        ws2812_set_color(i, 0, 0, 0);
+    }
+    ws2812_update(&_led_timer);
+  }
+  return (4096/5)*(sixPosState);
 }
 #endif
 
 void boardInit()
 {
-  RCC_AHB1PeriphClockCmd(PWR_RCC_AHB1Periph |
-                         PCBREV_RCC_AHB1Periph |
-                         LED_RCC_AHB1Periph |
-                         LCD_RCC_AHB1Periph |
-                         BACKLIGHT_RCC_AHB1Periph |
-                         KEYS_BACKLIGHT_RCC_AHB1Periph |
-                         SD_RCC_AHB1Periph |
-                         AUDIO_RCC_AHB1Periph |
-                         KEYS_RCC_AHB1Periph |
-                         ADC_RCC_AHB1Periph |
 #if defined(RADIO_FAMILY_T16)
-                         FLYSKY_HALL_RCC_AHB1Periph |
+  void board_set_bor_level();
+  board_set_bor_level();
 #endif
-#if defined(IMU_LSM6DS33)
-                         I2C_B2_RCC_AHB1Periph |
-#else
-                         AUX_SERIAL_RCC_AHB1Periph |
-#endif
-                         AUX2_SERIAL_RCC_AHB1Periph |
-                         TELEMETRY_RCC_AHB1Periph |
-                         TRAINER_RCC_AHB1Periph |
-                         BT_RCC_AHB1Periph |
-                         AUDIO_RCC_AHB1Periph |
-                         HAPTIC_RCC_AHB1Periph |
-                         INTMODULE_RCC_AHB1Periph |
-                         EXTMODULE_RCC_AHB1Periph |
-                         I2C_B1_RCC_AHB1Periph |
-                         GPS_RCC_AHB1Periph |
-                         SPORT_UPDATE_RCC_AHB1Periph |
-                         TOUCH_INT_RCC_AHB1Periph |
-                         TOUCH_RST_RCC_AHB1Periph,
-                         ENABLE);
 
-  RCC_APB1PeriphClockCmd(ROTARY_ENCODER_RCC_APB1Periph |
-                         INTERRUPT_xMS_RCC_APB1Periph |
-                         ADC_RCC_APB1Periph |
-                         TIMER_2MHz_RCC_APB1Periph |
-                         AUDIO_RCC_APB1Periph |
-#if defined(RADIO_FAMILY_T16)
-                         FLYSKY_HALL_RCC_APB1Periph |
+#if defined(MANUFACTURER_JUMPER) && defined(FUNCTION_SWITCHES) && !defined(DEBUG)
+  // This is needed to prevent radio from starting when usb is plugged to charge
+  usbInit();
+  // prime debounce state...
+   usbPlugged();
+   if (usbPlugged()) {
+     delaysInit();
+ #if defined(AUDIO_MUTE_GPIO)
+     // Charging can make a buzzing noise
+     gpio_init(AUDIO_MUTE_GPIO, GPIO_OUT, GPIO_PIN_SPEED_LOW);
+     gpio_set(AUDIO_MUTE_GPIO);
+ #endif
+     while (usbPlugged()) {
+       delay_ms(1000);
+     }
+     while(1) // Wait power to drain
+       pwrOff();
+   }
 #endif
-#if defined(IMU_LSM6DS33)
-                         I2C_B2_RCC_APB1Periph |
-#else
-                         AUX_SERIAL_RCC_APB1Periph |
-#endif
-                         AUX2_SERIAL_RCC_APB1Periph |
-                         TELEMETRY_RCC_APB1Periph |
-                         TRAINER_RCC_APB1Periph |
-                         AUDIO_RCC_APB1Periph |
-                         INTMODULE_RCC_APB1Periph |
-                         EXTMODULE_RCC_APB1Periph |
-                         I2C_B1_RCC_APB1Periph |
-                         MIXER_SCHEDULER_TIMER_RCC_APB1Periph |
-                         GPS_RCC_APB1Periph |
-                         BACKLIGHT_RCC_APB1Periph,
-                         ENABLE);
-
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG |
-                         LCD_RCC_APB2Periph |
-                         ADC_RCC_APB2Periph |
-                         HAPTIC_RCC_APB2Periph |
-                         INTMODULE_RCC_APB2Periph |
-                         EXTMODULE_RCC_APB2Periph |
-                         TELEMETRY_RCC_APB2Periph |
-                         BT_RCC_APB2Periph |
-                         AUX_SERIAL_RCC_APB2Periph |
-                         AUX2_SERIAL_RCC_APB2Periph |
-                         GPS_RCC_APB2Periph |
-                         BACKLIGHT_RCC_APB2Periph,
-                         ENABLE);
 
   pwrInit();
+
+  boardInitModulePorts();
+
+#if defined(INTMODULE_HEARTBEAT) &&                                     \
+  (defined(INTERNAL_MODULE_PXX1) || defined(INTERNAL_MODULE_PXX2))
+  pulsesSetModuleInitCb(_intmodule_heartbeat_init);
+  pulsesSetModuleDeInitCb(_intmodule_heartbeat_deinit);
+  trainerSetChangeCb(_intmodule_heartbeat_trainer_hook);
+#endif
+
+  board_trainer_init();
   pwrOn();
   delaysInit();
 
   __enable_irq();
-
-#if defined(DEBUG) && defined(AUX_SERIAL)
-  auxSerialInit(UART_MODE_DEBUG, 0); // default serial mode (None if DEBUG not defined)
-#endif
-#if defined(DEBUG) && defined(AUX2_SERIAL)
-  aux2SerialInit(UART_MODE_DEBUG, 0); // default serial mode (None if DEBUG not defined)
-#endif
 
   TRACE("\nHorus board started :)");
   TRACE("RCC->CSR = %08x", RCC->CSR);
 
   audioInit();
 
-  // we need to initialize g_FATFS_Obj here, because it is in .ram section (because of DMA access)
-  // and this section is un-initialized
-  memset(&g_FATFS_Obj, 0, sizeof(g_FATFS_Obj));
-
   keysInit();
+  switchInit();
   rotaryEncoderInit();
 
-#if NUM_PWMSTICKS > 0
-  sticksPwmInit();
-  delay_ms(20);
-  if (pwm_interrupt_count < 32) {
-    hardwareOptions.sticksPwmDisabled = true;
-  }
+#if defined(HARDWARE_TOUCH)
+  touchPanelInit();
 #endif
 
-  lcdInit();
-  backlightInit();
-
-  globalData.flyskygimbals = false;
-#if defined(RADIO_FAMILY_T16) || defined(PCBNV14)
-  flysky_hall_stick_check_init();
-
-  // Wait 70ms for FlySky gimbals to respond. According to LA trace, minimally 23ms is required
-  for (uint8_t ui8 = 0; ui8 < 70; ui8++)
-  {
-      flysky_hall_stick_loop();
-      delay_ms(1);
-      if (globalData.flyskygimbals)
-      {
-          break;
-      }
-  }
-
+#if defined(PWM_STICKS)
+  sticksPwmDetect();
+#endif
+  
+#if defined(FLYSKY_GIMBAL)
+  flysky_gimbal_init();
 #endif
 
-  if (globalData.flyskygimbals)
-  {
-      flysky_hall_stick_init();
-  }
+  if (!adcInit(&_adc_driver))
+    TRACE("adcInit failed");
 
-  if (!adcInit(&ADC_DRIVER))
-      TRACE("adcInit failed");
+  timersInit();
 
-#if defined(IMU_LSM6DS33)
-  imu_lsm6ds33_init();
+#if defined(HARDWARE_TOUCH) && !defined(SIMU)
+  touchPanelInit();
 #endif
 
-  init2MhzTimer();
-  init1msTimer();
+#if defined(CSD203_SENSOR)
+  initCSD203();
+#endif
+
   usbInit();
   hapticInit();
+
+#if defined(LED_STRIP_GPIO)
+  ws2812_init(&_led_timer, LED_STRIP_LENGTH, WS2812_GRB);
+  ledStripOff();
+#endif
 
 #if defined(BLUETOOTH)
   bluetoothInit(BLUETOOTH_DEFAULT_BAUDRATE, true);
 #endif
 
-#if defined(INTERNAL_GPS)
-  gpsInit(GPS_USART_BAUDRATE);
+#if defined(VIDEO_SWITCH)
+  videoSwitchInit();
 #endif
 
 #if defined(DEBUG)
-  DBGMCU_APB1PeriphConfig(DBGMCU_IWDG_STOP|DBGMCU_TIM1_STOP|DBGMCU_TIM2_STOP|DBGMCU_TIM3_STOP|DBGMCU_TIM4_STOP|DBGMCU_TIM5_STOP|DBGMCU_TIM6_STOP|DBGMCU_TIM7_STOP|DBGMCU_TIM8_STOP|DBGMCU_TIM9_STOP|DBGMCU_TIM10_STOP|DBGMCU_TIM11_STOP|DBGMCU_TIM12_STOP|DBGMCU_TIM13_STOP|DBGMCU_TIM14_STOP, ENABLE);
+  // DBGMCU_APB1PeriphConfig(DBGMCU_IWDG_STOP|DBGMCU_TIM1_STOP|DBGMCU_TIM2_STOP|DBGMCU_TIM3_STOP|DBGMCU_TIM4_STOP|DBGMCU_TIM5_STOP|DBGMCU_TIM6_STOP|DBGMCU_TIM7_STOP|DBGMCU_TIM8_STOP|DBGMCU_TIM9_STOP|DBGMCU_TIM10_STOP|DBGMCU_TIM11_STOP|DBGMCU_TIM12_STOP|DBGMCU_TIM13_STOP|DBGMCU_TIM14_STOP, ENABLE);
 #endif
 
   ledInit();
@@ -274,19 +225,27 @@ void boardInit()
   usbChargerInit();
 #endif
 
-#if HAS_SPORT_UPDATE_CONNECTOR()
-  sportUpdateInit();
+#if defined(RTCLOCK)
+  ledRed();
+  rtcInit(); // RTC must be initialized before rambackupRestore() is called
 #endif
 
   ledBlue();
-
-#if defined(RTCLOCK) && !defined(COPROCESSOR)
-  rtcInit(); // RTC must be initialized before rambackupRestore() is called
+#if !defined(LCD_VERTICAL_INVERT)
+  lcdSetInitalFrameBuffer(lcdFront->getData());
+#elif defined(RADIO_F16)
+  if(hardwareOptions.pcbrev > 0) {
+    lcdSetInitalFrameBuffer(lcdFront->getData());
+  }
 #endif
 }
+#endif
+
+extern void rtcDisableBackupReg();
 
 void boardOff()
 {
+  ledOff();
   backlightEnable(0);
 
   while (pwrPressed()) {
@@ -297,29 +256,19 @@ void boardOff()
 
 #if defined(PCBX12S)
   // Shutdown the Audio amp
-  GPIO_InitTypeDef GPIO_InitStructure;
-  GPIO_InitStructure.GPIO_Pin = AUDIO_SHUTDOWN_GPIO_PIN;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-  GPIO_Init(AUDIO_SHUTDOWN_GPIO, &GPIO_InitStructure);
-  GPIO_ResetBits(AUDIO_SHUTDOWN_GPIO, AUDIO_SHUTDOWN_GPIO_PIN);
+  gpio_init(AUDIO_SHUTDOWN_GPIO, GPIO_OUT, GPIO_PIN_SPEED_LOW);
+  gpio_clear(AUDIO_SHUTDOWN_GPIO);
 #endif
 
   // Shutdown the Haptic
   hapticDone();
 
-#if defined(RTC_BACKUP_RAM)
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_BKPSRAM, DISABLE);
-  PWR_BackupRegulatorCmd(DISABLE);
-#endif
-
-  RTC->BKP0R = SHUTDOWN_REQUEST;
+  rtcDisableBackupReg();
+  // RTC->BKP0R = SHUTDOWN_REQUEST;
 
   pwrOff();
-  
-  // We reach here only in forced power situations, such as hw-debugging with external power  
+
+  // We reach here only in forced power situations, such as hw-debugging with external power
   // Enter STM32 stop mode / deep-sleep
   // Code snippet from ST Nucleo PWR_EnterStopMode example
 #define PDMode             0x00000000U
@@ -333,28 +282,14 @@ void boardOff()
 
 /* Set SLEEPDEEP bit of Cortex System Control Register */
   SET_BIT(SCB->SCR, ((uint32_t)SCB_SCR_SLEEPDEEP_Msk));
-  
+
   // To avoid HardFault at return address, end in an endless loop
   while (1) {
 
   }
 }
 
-#if defined (RADIO_TX16S)
-  #define BATTERY_DIVIDER 1495
-#else
-  #define BATTERY_DIVIDER 1629
-#endif 
-
-uint16_t getBatteryVoltage()
-{
-  int32_t instant_vbat = anaIn(TX_VOLTAGE);  // using filtered ADC value on purpose
-  return (uint16_t)((instant_vbat * (1000 + g_eeGeneral.txVoltageCalibration)) / BATTERY_DIVIDER);
-}
-
 bool isBacklightEnabled()
 {
-  if(globalData.unexpectedShutdown)
-    return true;
   return boardBacklightOn;
 }

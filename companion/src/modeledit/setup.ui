@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1007</width>
+    <width>1046</width>
     <height>435</height>
    </rect>
   </property>
@@ -184,7 +184,7 @@
         </widget>
        </item>
        <item alignment="Qt::AlignRight">
-        <widget class="QLabel" name="label_spacer">
+        <widget class="QLabel" name="lblHatsMode">
          <property name="font">
           <font>
            <weight>50</weight>
@@ -192,7 +192,7 @@
           </font>
          </property>
          <property name="text">
-          <string></string>
+          <string>Hats Mode</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -378,7 +378,7 @@
          <item alignment="Qt::AlignTop">
           <widget class="QLabel" name="label_potWarning">
            <property name="text">
-            <string>Pot Warnings</string>
+            <string>Pot/Slider Warnings</string>
            </property>
           </widget>
          </item>
@@ -393,7 +393,7 @@
              </item>
              <item>
               <property name="text">
-               <string>Manual</string>
+               <string>ON</string>
               </property>
              </item>
              <item>
@@ -548,19 +548,19 @@
        </item>
        <item row="1" column="3">
         <widget class="QSpinBox" name="customThrottleWarningPosition">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimum">
-         <number>-100</number>
-        </property>
-        <property name="maximum">
-         <number>100</number>
-        </property>
-       </widget>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimum">
+          <number>-100</number>
+         </property>
+         <property name="maximum">
+          <number>100</number>
+         </property>
+        </widget>
        </item>
        <item row="2" column="3">
         <widget class="QCheckBox" name="displayText">
@@ -576,6 +576,16 @@
         <widget class="QCheckBox" name="gfEnabled">
          <property name="text">
           <string>Global Functions</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="3">
+        <widget class="QCheckBox" name="checklistInteractive">
+         <property name="layoutDirection">
+          <enum>Qt::LeftToRight</enum>
+         </property>
+         <property name="text">
+          <string>Interactive Checklist</string>
          </property>
         </widget>
        </item>
@@ -617,7 +627,9 @@
          </item>
         </widget>
        </item>
-
+       <item row="1" column="0">
+        <widget class="AutoComboBox" name="cboHatsMode"/>
+       </item>
        <item row="2" column="4">
         <widget class="QPushButton" name="editText">
          <property name="sizePolicy">

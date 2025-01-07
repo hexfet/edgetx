@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -27,7 +28,7 @@ bool SdcardFormat::write(const RadioData & radioData)
   QDir dir(filename);
   dir.mkdir("RADIO");
   dir.mkdir("MODELS");
-  return CategorizedStorageFormat::write(radioData);
+  return LabelsStorageFormat::write(radioData);
 }
 
 bool SdcardFormat::loadFile(QByteArray & filedata, const QString & filename)
@@ -61,11 +62,24 @@ bool SdcardFormat::getFileList(std::list<std::string>& filelist)
 {
   QDir dir(filename);
   if (!dir.cd("MODELS")) return false;
-  
+
   QStringList ql = dir.entryList();
   for (const auto& str : ql) {
     filelist.push_back("MODELS/" + str.toStdString());
   }
+  return true;
+}
+
+bool SdcardFormat::deleteFile(const QString & filename)
+{
+  QString path = this->filename + "/" + filename;
+
+  if (!QFile::remove(path)) {
+    setError(tr("Error deleting file %1").arg(path));
+    return false;
+  }
+
+  qDebug() << "File" << path << "deleted";
   return true;
 }
 

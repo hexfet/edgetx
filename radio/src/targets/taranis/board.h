@@ -19,18 +19,16 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _BOARD_H_
-#define _BOARD_H_
+#pragma once
 
 #include <inttypes.h>
-#include "definitions.h"
-#include "opentx_constants.h"
-#include "board_common.h"
 #include "hal.h"
+#include "hal/serial_port.h"
+#include "hal/watchdog_driver.h"
 
-#if defined(RADIO_TX12) || defined(RADIO_ZORRO)
-  #define  NAVIGATION_X7_TX12
-#endif
+#include "definitions.h"
+#include "edgetx_constants.h"
+#include "board_common.h"
 
 #if defined(ROTARY_ENCODER_NAVIGATION)
 // Rotary Encoder driver
@@ -38,36 +36,37 @@ void rotaryEncoderInit();
 void rotaryEncoderCheck();
 #endif
 
-#if defined(RADIO_ZORRO)
-#define ROTARY_ENCODER_INVERT
+#if defined(STM32F413xx) || defined(STM32F407xG)
+#define FLASHSIZE                       0x100000 // 1M
+#else
+#define FLASHSIZE                       0x80000  // 512k
 #endif
-
-#define FLASHSIZE                       0x80000
+#define FLASH_PAGESIZE                  256
 #define BOOTLOADER_SIZE                 0x8000
 #define FIRMWARE_ADDRESS                0x08000000
+#define FIRMWARE_LEN(fsize)             (fsize - BOOTLOADER_SIZE)
+#define FIRMWARE_MAX_LEN                (FLASHSIZE - BOOTLOADER_SIZE)
+#define APP_START_ADDRESS               (uint32_t)(FIRMWARE_ADDRESS + BOOTLOADER_SIZE)
 
 #define LUA_MEM_MAX                     (0)    // max allowed memory usage for complete Lua  (in bytes), 0 means unlimited
 
-#if defined(STM32F4)
-  #define PERI1_FREQUENCY               42000000
-  #define PERI2_FREQUENCY               84000000
+#if defined(PCBXLITE)
+# define BOOTLOADER_KEYS                0x0F
+#elif defined(RADIO_MT12)
+# define BOOTLOADER_KEYS                0x06
 #else
-  #define PERI1_FREQUENCY               30000000
-  #define PERI2_FREQUENCY               60000000
+# define BOOTLOADER_KEYS                0x42
 #endif
 
-#define TIMER_MULT_APB1                 2
-#define TIMER_MULT_APB2                 2
+#if defined(RADIO_FAMILY_T20)
+# define SECONDARY_BOOTLOADER_KEYS      0x1200
+#endif
 
 extern uint16_t sessionTimer;
 
 // Board driver
 void boardInit();
 void boardOff();
-
-// Timers driver
-void init2MhzTimer();
-void init1msTimer();
 
 // PCBREV driver
 enum {
@@ -76,82 +75,27 @@ enum {
   PCBREV_X7_40 = 1,
 };
 
-// SD driver
-#define BLOCK_SIZE                      512 /* Block Size in Bytes */
-#if !defined(SIMU) || defined(SIMU_DISKIO)
-uint32_t sdIsHC();
-uint32_t sdGetSpeed();
-#define SD_IS_HC()                      (sdIsHC())
-#define SD_GET_SPEED()                  (sdGetSpeed())
-#define SD_GET_FREE_BLOCKNR()           (sdGetFreeSectors())
-#else
-#define SD_IS_HC()                      (0)
-#define SD_GET_SPEED()                  (0)
-#endif
-#define __disk_read                     disk_read
-#define __disk_write                    disk_write
-#if defined(SIMU)
-  #if !defined(SIMU_DISKIO)
-    #define sdInit()
-    #define sdDone()
-  #endif
-  #define sdMount()
-  #define SD_CARD_PRESENT()               true
-#else
-void sdInit();
-void sdMount();
-void sdDone();
-void sdPoll10ms();
-uint32_t sdMounted();
-#define SD_CARD_PRESENT()               ((SD_GPIO_PRESENT_GPIO->IDR & SD_GPIO_PRESENT_GPIO_PIN) == 0)
-#endif
-
-// Flash Write driver
-#define FLASH_PAGESIZE 256
-void unlockFlash();
-void lockFlash();
-void flashWrite(uint32_t * address, const uint32_t * buffer);
-uint32_t isFirmwareStart(const uint8_t * buffer);
-uint32_t isBootloaderStart(const uint8_t * buffer);
-
 // Pulses driver
-#define INTERNAL_MODULE_ON()            GPIO_SetBits(INTMODULE_PWR_GPIO, INTMODULE_PWR_GPIO_PIN)
-#if defined(INTMODULE_USART)
-  #define INTERNAL_MODULE_OFF()         intmoduleStop()
-#else
-  #define INTERNAL_MODULE_OFF()         GPIO_ResetBits(INTMODULE_PWR_GPIO, INTMODULE_PWR_GPIO_PIN)
-#endif
+#define INTERNAL_MODULE_ON()   gpio_set(INTMODULE_PWR_GPIO)
+#define INTERNAL_MODULE_OFF()  gpio_clear(INTMODULE_PWR_GPIO)
 
 #if (defined(INTERNAL_MODULE_PXX1) || defined(INTERNAL_MODULE_PXX2)) && (!defined(PCBX9LITE) || defined(PCBX9LITES))
   #define HARDWARE_INTERNAL_RAS
 #endif
 
 #define EXTERNAL_MODULE_ON()            EXTERNAL_MODULE_PWR_ON()
-
-#if defined(EXTMODULE_USART)
-  #define EXTERNAL_MODULE_OFF()         extmoduleStop()
-#else
-  #define EXTERNAL_MODULE_OFF()         EXTERNAL_MODULE_PWR_OFF()
-#endif
-
-#if defined(RADIO_T12)
-#define IS_INTERNAL_MODULE_ON()         false
-#else
-#define IS_INTERNAL_MODULE_ON()         (GPIO_ReadInputDataBit(INTMODULE_PWR_GPIO, INTMODULE_PWR_GPIO_PIN) == Bit_SET)
-#endif
-
-void extmoduleSerialStart();
-void extmoduleInvertedSerialStart(uint32_t baudrate);
-void extmoduleSendBuffer(const uint8_t * data, uint8_t size);
-void extmoduleSendNextFrame();
-void extmoduleSendInvertedByte(uint8_t byte);
+#define EXTERNAL_MODULE_OFF()           EXTERNAL_MODULE_PWR_OFF()
 
 // Trainer driver
 #define SLAVE_MODE()                    (g_model.trainerData.mode == TRAINER_MODE_SLAVE)
 
 #if defined(TRAINER_DETECT_GPIO)
   // Trainer detect is a switch on the jack
-  #define TRAINER_CONNECTED()           (GPIO_ReadInputDataBit(TRAINER_DETECT_GPIO, TRAINER_DETECT_GPIO_PIN) == Bit_RESET)
+  #if defined(TRAINER_DETECT_INVERTED)
+    #define TRAINER_CONNECTED()           (gpio_read(TRAINER_DETECT_GPIO) ? 0 : 1)
+  #else
+    #define TRAINER_CONNECTED()           (gpio_read(TRAINER_DETECT_GPIO) ? 1 : 0)
+  #endif
 #elif defined(PCBXLITES)
   // Trainer is on the same connector than Headphones
   enum JackState
@@ -170,524 +114,45 @@ void extmoduleSendInvertedByte(uint8_t byte);
   #define TRAINER_CONNECTED()           true
 #endif
 
-#if defined(TRAINER_GPIO)
-  void init_trainer_ppm();
-  void stop_trainer_ppm();
-  void init_trainer_capture();
-  void stop_trainer_capture();
-#else
-  #define init_trainer_ppm()
-  #define stop_trainer_ppm()
-  #define init_trainer_capture()
-  #define stop_trainer_capture()
-#endif
-#if defined(TRAINER_MODULE_CPPM)
-  void init_trainer_module_cppm();
-  void stop_trainer_module_cppm();
-#else
-  #define init_trainer_module_cppm()
-  #define stop_trainer_module_cppm()
-#endif
-#if defined(TRAINER_MODULE_SBUS)
-  void init_trainer_module_sbus();
-  void stop_trainer_module_sbus();
-#else
-  #define init_trainer_module_sbus()
-  #define stop_trainer_module_sbus()
+// POTS and SLIDERS default configuration
+#if defined(RADIO_BOXER)
+#define XPOS_CALIB_DEFAULT  {0x5, 0xd, 0x16, 0x1f, 0x28}
 #endif
 
-#if defined(INTMODULE_HEARTBEAT_GPIO)
-void init_intmodule_heartbeat();
-void stop_intmodule_heartbeat();
-void check_intmodule_heartbeat();
-#else
-#define init_intmodule_heartbeat()
-#define stop_intmodule_heartbeat()
-#define check_intmodule_heartbeat()
-#endif
-
-void check_telemetry_exti();
-
-// SBUS
-int sbusGetByte(uint8_t * byte);
-
-// Keys driver
-enum EnumKeys
-{
-#if defined(KEYS_GPIO_REG_SHIFT)
-  KEY_SHIFT,
-#endif
-
-#if defined(KEYS_GPIO_REG_MENU)
-  KEY_MENU,
-#endif
-
-  KEY_EXIT,
-  KEY_ENTER,
-
-#if defined(KEYS_GPIO_REG_DOWN)
-  KEY_DOWN,
-  KEY_UP,
-#endif
-
-#if defined(KEYS_GPIO_REG_RIGHT)
-  KEY_RIGHT,
-  KEY_LEFT,
-#endif
-
-#if defined(KEYS_GPIO_REG_PAGE)
-  KEY_PAGE,
-#endif
-
-#if defined(KEYS_GPIO_REG_PAGEUP)
-  KEY_PAGEUP,
-#endif
-
-#if defined(KEYS_GPIO_REG_PAGEDN)
-  KEY_PAGEDN,
-#endif
-
-#if defined(KEYS_GPIO_REG_SYS)
-  KEY_SYS,
-#endif
-
-#if defined(KEYS_GPIO_REG_MDL)
-  KEY_MODEL,
-#endif
-
-#if defined(KEYS_GPIO_REG_TELE)
-  KEY_TELE,
-#endif
-
-#if defined(KEYS_GPIO_REG_PLUS)
-  KEY_PLUS,
-  KEY_MINUS,
-#endif
-
-  KEY_COUNT,
-  KEY_MAX = KEY_COUNT - 1,
-
-#if defined(KEYS_GPIO_REG_BIND)
-  KEY_BIND,
-#endif
-
-#if defined(ROTARY_ENCODER_NAVIGATION)
-  KEY_PLUS,
-  KEY_MINUS,
-#endif
-
-  TRM_BASE,
-  TRM_LH_DWN = TRM_BASE,
-  TRM_LH_UP,
-  TRM_LV_DWN,
-  TRM_LV_UP,
-  TRM_RV_DWN,
-  TRM_RV_UP,
-  TRM_RH_DWN,
-  TRM_RH_UP,
-  TRM_LAST = TRM_RH_UP,
-
-  NUM_KEYS
-};
-
-#if defined(PCBX9E) && !defined(SIMU)
-  #define KEY_UP                        KEY_MINUS
-  #define KEY_DOWN                      KEY_PLUS
-  #define KEY_RIGHT                     KEY_PLUS
-  #define KEY_LEFT                      KEY_MINUS
-#elif defined(NAVIGATION_XLITE)
-  #define KEY_PLUS                      KEY_RIGHT
-  #define KEY_MINUS                     KEY_LEFT
-#elif defined(NAVIGATION_9X)
-  #define KEY_MENU                      KEY_ENTER
-  #define KEY_MINUS                     KEY_DOWN
-  #define KEY_PLUS                      KEY_UP
-#else
-  #define KEY_UP                        KEY_PLUS
-  #define KEY_DOWN                      KEY_MINUS
-  #define KEY_RIGHT                     KEY_MINUS
-  #define KEY_LEFT                      KEY_PLUS
-#endif
-
-#if defined(KEYS_GPIO_PIN_SHIFT)
-#define IS_SHIFT_KEY(index)             (index == KEY_SHIFT)
-#if defined(SIMU)
-#define IS_SHIFT_PRESSED()              (readKeys() & (1 << KEY_SHIFT))
-#else
-#define IS_SHIFT_PRESSED()              (~KEYS_GPIO_REG_SHIFT & KEYS_GPIO_PIN_SHIFT)
-#endif
-#else
-#define IS_SHIFT_KEY(index)             (false)
-#define IS_SHIFT_PRESSED()              (false)
-#endif
-
-enum EnumSwitches
-{
-  SW_SA,
-  SW_SB,
-  SW_SC,
-  SW_SD,
-  SW_SE,
-  SW_SF,
-  SW_SG,
-  SW_SH,
-  SW_SI,
-  SW_SJ,
-  SW_SK,
-  SW_SL,
-  SW_SM,
-  SW_SO,
-  SW_SP,
-  SW_SQ,
-  SW_SR,
-};
-#if defined(RADIO_TX12)
-  #define IS_3POS(x)                      ((x) != SW_SA && (x) != SW_SD)
-#elif defined(RADIO_ZORRO)
-  #define IS_3POS(x)                      ((x) == SW_SB || (x) == SW_SC)
-#else
-  #define IS_3POS(x)                      ((x) != SW_SF && (x) != SW_SH)
-#endif
-enum EnumSwitchesPositions
-{
-  SW_SA0,
-  SW_SA1,
-  SW_SA2,
-  SW_SB0,
-  SW_SB1,
-  SW_SB2,
-  SW_SC0,
-  SW_SC1,
-  SW_SC2,
-  SW_SD0,
-  SW_SD1,
-  SW_SD2,
-#if defined(HARDWARE_SWITCH_E)
-  SW_SE0,
-  SW_SE1,
-  SW_SE2,
-#endif
-#if defined(HARDWARE_SWITCH_F)
-  SW_SF0,
-  SW_SF1,
-  SW_SF2,
-#endif
-#if defined(HARDWARE_SWITCH_G)
-  SW_SG0,
-  SW_SG1,
-  SW_SG2,
-#endif
-#if defined(HARDWARE_SWITCH_H)
-  SW_SH0,
-  SW_SH1,
-  SW_SH2,
-#endif
-#if defined(RADIO_X9DP2019)
-  SW_SI0,
-  SW_SI1,
-  SW_SI2,
-#endif
-#if defined(PCBX7ACCESS)
-  SW_SI0,
-  SW_SI1,
-  SW_SI2,
-#elif defined(PCBX7) && !defined(RADIO_ZORRO)
-  SW_SI0,
-  SW_SI1,
-  SW_SI2,
-  SW_SJ0,
-  SW_SJ1,
-  SW_SJ2,
-#endif
-#if defined(PCBX9E)
-  SW_SI0,
-  SW_SI1,
-  SW_SI2,
-  SW_SJ0,
-  SW_SJ1,
-  SW_SJ2,
-  SW_SK0,
-  SW_SK1,
-  SW_SK2,
-  SW_SL0,
-  SW_SL1,
-  SW_SL2,
-  SW_SM0,
-  SW_SM1,
-  SW_SM2,
-  SW_SN0,
-  SW_SN1,
-  SW_SN2,
-  SW_SO0,
-  SW_SO1,
-  SW_SO2,
-  SW_SP0,
-  SW_SP1,
-  SW_SP2,
-  SW_SQ0,
-  SW_SQ1,
-  SW_SQ2,
-  SW_SR0,
-  SW_SR1,
-  SW_SR2,
-#endif
-  NUM_SWITCHES_POSITIONS
-};
-
-#if defined(PCBXLITES)
-  #define NUM_SWITCHES                  6
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 10) + (SWITCH_TOGGLE << 8) + (SWITCH_2POS << 6) + (SWITCH_2POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITHOUT_DETENT << 2) + (POT_WITHOUT_DETENT << 0)
-#elif defined(PCBXLITE)
-  #define NUM_SWITCHES                  4
-  #define STORAGE_NUM_SWITCHES          6
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_2POS << 6) + (SWITCH_2POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0);
-  #define DEFAULT_POTS_CONFIG           (POT_WITHOUT_DETENT << 2) + (POT_WITHOUT_DETENT << 0)
-#elif defined(RADIO_TLITE)
-  #define NUM_SWITCHES                  4
-  #define STORAGE_NUM_SWITCHES          8
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_2POS << 6) + (SWITCH_2POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0);
-  #define DEFAULT_POTS_CONFIG           (0)
-#elif defined(RADIO_TPRO)
-  #define NUM_SWITCHES                  10
-  #define NUM_FUNCTIONS_SWITCHES        6
-  #define NUM_REGULAR_SWITCHES          (NUM_SWITCHES - NUM_FUNCTIONS_SWITCHES)
-  #define STORAGE_NUM_SWITCHES          10
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 6) + (SWITCH_TOGGLE << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0);
-  #define DEFAULT_FS_CONFIG             (SWITCH_2POS << 10) + (SWITCH_2POS << 8) + (SWITCH_2POS << 6) + (SWITCH_2POS << 4) + (SWITCH_2POS << 2) + (SWITCH_2POS << 0)
-  #define DEFAULT_FS_GROUPS             (1 << 10) + (1 << 8) + (1 << 6) + (1 << 4) + (1 << 2) + (1 << 0)  // Set all FS to group 1 to act like a 6pos
-  #define DEFAULT_FS_STARTUP_CONFIG     ((FS_START_PREVIOUS << 10) + (FS_START_PREVIOUS << 8) + (FS_START_PREVIOUS << 6) + (FS_START_PREVIOUS << 4) + (FS_START_PREVIOUS << 2) + (FS_START_PREVIOUS << 0))  // keep last state by default
-  #define DEFAULT_POTS_CONFIG           (POT_WITHOUT_DETENT << 0) + (POT_WITH_DETENT << 2); // S1 = pot without detent, S2 = pot with detent
-#elif defined(RADIO_FAMILY_JUMPER_T12)
-  #define NUM_SWITCHES                  8
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_2POS << 10) + (SWITCH_2POS << 8) + (SWITCH_3POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITHOUT_DETENT << 0) + (POT_WITHOUT_DETENT << 2); // S1 = pot without detent, S2 = pot with detent
-#elif defined(RADIO_TX12)
-  #define NUM_SWITCHES                  8
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_3POS << 10) + (SWITCH_3POS << 8) + (SWITCH_TOGGLE << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_TOGGLE << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITH_DETENT << 0) + (POT_WITH_DETENT << 2);
-#elif defined(RADIO_ZORRO)
-  #define NUM_SWITCHES                  8
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 14) + (SWITCH_TOGGLE << 12) + (SWITCH_2POS << 10) + (SWITCH_2POS << 8) + (SWITCH_TOGGLE << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_TOGGLE << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITHOUT_DETENT << 0) + (POT_WITHOUT_DETENT << 2);
-#elif defined(RADIO_T8)
-  #define NUM_SWITCHES                  4
-  #define STORAGE_NUM_SWITCHES          8
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_2POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_2POS << 0);
-  #define DEFAULT_POTS_CONFIG           (0)
-#elif defined(PCBX7ACCESS)
-  #define NUM_SWITCHES                  7
-  #define STORAGE_NUM_SWITCHES          8
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 10) + (SWITCH_2POS << 8) + (SWITCH_3POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITHOUT_DETENT << 0) + (POT_WITH_DETENT << 2); // S1 = pot without detent, S2 = pot with detent
-#elif defined(PCBX7)
-  #define NUM_SWITCHES                  8
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 10) + (SWITCH_2POS << 8) + (SWITCH_3POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITHOUT_DETENT << 0) + (POT_WITH_DETENT << 2); // S1 = pot without detent, S2 = pot with detent
-#elif defined(PCBX9LITES)
-  #define NUM_SWITCHES                  7
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 12) + (SWITCH_TOGGLE << 10) + (SWITCH_TOGGLE << 8) + (SWITCH_2POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0);
-  #define DEFAULT_POTS_CONFIG           (POT_WITH_DETENT << 0); // S1 = pot with detent
-#elif defined(PCBX9LITE)
-  #define NUM_SWITCHES                  5
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 8) + (SWITCH_2POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0);
-  #define DEFAULT_POTS_CONFIG           (POT_WITH_DETENT << 0); // S1 = pot with detent
-#elif defined(PCBX9E)
-  #define NUM_SWITCHES                  18 // yes, it's perfect like that !
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 14) + (SWITCH_3POS << 12) + (SWITCH_2POS << 10) + (SWITCH_3POS << 8) + (SWITCH_3POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITH_DETENT << 0) + (POT_WITH_DETENT << 2); // S1 = pot without detent, S2 = pot with detent
-  #define DEFAULT_SLIDERS_CONFIG        (SLIDER_WITH_DETENT << 3) + (SLIDER_WITH_DETENT << 2) + (SLIDER_WITH_DETENT << 1) + (SLIDER_WITH_DETENT << 0)
-#elif defined(RADIO_X9DP2019)
-  #define NUM_SWITCHES                  9
-  #define STORAGE_NUM_SWITCHES          NUM_SWITCHES
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 16) + (SWITCH_TOGGLE << 14) + (SWITCH_3POS << 12) + (SWITCH_2POS << 10) + (SWITCH_3POS << 8) + (SWITCH_3POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0);
-  #define DEFAULT_POTS_CONFIG           (POT_WITH_DETENT << 0) + (POT_WITH_DETENT << 2); // S1 = pot without detent, S2 = pot with detent
-  #define DEFAULT_SLIDERS_CONFIG        (SLIDER_WITH_DETENT << 1) + (SLIDER_WITH_DETENT << 0)
-#elif defined(PCBX9D) || defined(PCBX9DP)
-  #define NUM_SWITCHES                  8
-  #define STORAGE_NUM_SWITCHES          9
-  #define DEFAULT_SWITCH_CONFIG         (SWITCH_TOGGLE << 14) + (SWITCH_3POS << 12) + (SWITCH_2POS << 10) + (SWITCH_3POS << 8) + (SWITCH_3POS << 6) + (SWITCH_3POS << 4) + (SWITCH_3POS << 2) + (SWITCH_3POS << 0)
-  #define DEFAULT_POTS_CONFIG           (POT_WITH_DETENT << 0) + (POT_WITH_DETENT << 2); // S1 = pot without detent, S2 = pot with detent
-  #define DEFAULT_SLIDERS_CONFIG        (SLIDER_WITH_DETENT << 1) + (SLIDER_WITH_DETENT << 0)
-#endif
-
-#if !defined(NUM_FUNCTIONS_SWITCHES)
-  #define NUM_FUNCTIONS_SWITCHES        0
-#endif
-
-#define STORAGE_NUM_SWITCHES_POSITIONS  (STORAGE_NUM_SWITCHES * 3)
-
-void keysInit();
-uint32_t switchState(uint8_t index);
-uint32_t readKeys();
-uint32_t readTrims();
 #if defined(FUNCTION_SWITCHES)
-extern uint8_t fsPreviousState;
-void evalFunctionSwitches();
-void setFSStartupPosition();
-uint8_t getFSLogicalState(uint8_t index);
-uint8_t getFSPhysicalState(uint8_t index);
+
+#define NUM_FUNCTIONS_SWITCHES 6
+#define NUM_FUNCTIONS_GROUPS   3
+
+#define DEFAULT_FS_CONFIG                                         \
+  (SWITCH_2POS << 10) + (SWITCH_2POS << 8) + (SWITCH_2POS << 6) + \
+      (SWITCH_2POS << 4) + (SWITCH_2POS << 2) + (SWITCH_2POS << 0)
+
+#define DEFAULT_FS_GROUPS                                 \
+  (1 << 10) + (1 << 8) + (1 << 6) + (1 << 4) + (1 << 2) + \
+      (1 << 0)  // Set all FS to group 1 to act like a 6pos
+
+#define DEFAULT_FS_STARTUP_CONFIG                         \
+  ((FS_START_PREVIOUS << 10) + (FS_START_PREVIOUS << 8) + \
+   (FS_START_PREVIOUS << 6) + (FS_START_PREVIOUS << 4) +  \
+   (FS_START_PREVIOUS << 2) +                             \
+   (FS_START_PREVIOUS << 0))  // keep last state by default
+
+#else
+
+#define NUM_FUNCTIONS_SWITCHES 0
+
 #endif
 
-#define TRIMS_PRESSED()                 (readTrims())
-#define KEYS_PRESSED()                  (readKeys())
-
-// WDT driver
-#define WDG_DURATION                      500 /*ms*/
-#if !defined(WATCHDOG) || defined(SIMU)
-  #define WDG_ENABLE(x)
-  #define WDG_RESET()
-#else
-  #define WDG_ENABLE(x)                 watchdogInit(x)
-  #define WDG_RESET()                   IWDG->KR = 0xAAAA
-#endif
-void watchdogInit(unsigned int duration);
-#define WAS_RESET_BY_SOFTWARE()             (RCC->CSR & RCC_CSR_SFTRSTF)
-#define WAS_RESET_BY_WATCHDOG()             (RCC->CSR & (RCC_CSR_WDGRSTF | RCC_CSR_WWDGRSTF))
-#define WAS_RESET_BY_WATCHDOG_OR_SOFTWARE() (RCC->CSR & (RCC_CSR_WDGRSTF | RCC_CSR_WWDGRSTF | RCC_CSR_SFTRSTF))
-
-// ADC driver
-enum Analogs {
-  STICK1,
-  STICK2,
-  STICK3,
-  STICK4,
-  POT_FIRST,
-  POT1 = POT_FIRST,
-#if defined(PCBX9LITE)
-  POT_LAST = POT1,
-#elif defined(PCBXLITE) || defined(PCBX7)
-  POT2,
-  POT_LAST = POT2,
-#elif defined(PCBX9E)
-  POT2,
-  POT3,
-  POT4,
-  POT_LAST = POT4,
-  SLIDER1,
-  SLIDER2,
-  SLIDER3,
-  SLIDER4,
-#else
-  POT2,
-  POT3,
-  POT_LAST = POT3,
-  SLIDER1,
-  SLIDER2,
-#endif
-  TX_VOLTAGE,
-  TX_RTC_VOLTAGE,
-  NUM_ANALOGS
-};
-
-#define HAS_TX_RTC_VOLTAGE
-
-#if defined(PCBX9LITE)
-  #define NUM_POTS                      1
-  #define NUM_SLIDERS                   0
-  #define STORAGE_NUM_POTS              1
-  #define STORAGE_NUM_SLIDERS           0
-#elif defined(RADIO_T8) || defined(RADIO_TLITE)
-  #define NUM_POTS                      0
-  #define NUM_SLIDERS                   0
-  #define STORAGE_NUM_POTS              2
-  #define STORAGE_NUM_SLIDERS           0
-#elif defined(PCBXLITE) || defined(PCBX7)
-  #define NUM_POTS                      2
-  #define NUM_SLIDERS                   0
-  #define STORAGE_NUM_POTS              2
-  #define STORAGE_NUM_SLIDERS           0
-#elif defined(PCBX9E)
-  #define NUM_POTS                      4
-  #define NUM_SLIDERS                   4
-  #define STORAGE_NUM_POTS              4
-  #define STORAGE_NUM_SLIDERS           4
-#elif defined(PCBX9DP)
-  #define NUM_POTS                      3
-  #define NUM_SLIDERS                   2
-  #define STORAGE_NUM_POTS              3
-  #define STORAGE_NUM_SLIDERS           2
-#else
-  #define NUM_POTS                      3 // TODO X9D has only 2 pots
-  #define NUM_SLIDERS                   2
-  #define STORAGE_NUM_POTS              3
-  #define STORAGE_NUM_SLIDERS           2
-#endif
-
-#define NUM_XPOTS                       STORAGE_NUM_POTS
-#define NUM_TRIMS                       4
-#define NUM_MOUSE_ANALOGS               0
-#define STORAGE_NUM_MOUSE_ANALOGS       0
-
-#if defined(PCBXLITE)
-  #define NUM_TRIMS_KEYS                4
-#else
-  #define NUM_TRIMS_KEYS                (NUM_TRIMS * 2)
-#endif
-
-#if defined(STICKS_PWM)
-  #define NUM_PWMSTICKS                 4
-  #define STICKS_PWM_ENABLED()          (!hardwareOptions.sticksPwmDisabled)
-  void sticksPwmInit();
-  void sticksPwmRead(uint16_t * values);
-  extern volatile uint32_t pwm_interrupt_count; // TODO => reusable buffer (boot section)
-#else
-  #define STICKS_PWM_ENABLED()          false
+#if defined(ADC_GPIO_PIN_STICK_TH)
+  #define SURFACE_RADIO  true
 #endif
 
 PACK(typedef struct {
   uint8_t pcbrev:2;
-  uint8_t sticksPwmDisabled:1;
-  uint8_t pxx2Enabled:1;
 }) HardwareOptions;
 
 extern HardwareOptions hardwareOptions;
-
-#if !defined(PXX2)
-  #define IS_PXX2_INTERNAL_ENABLED()            (false)
-  #define IS_PXX1_INTERNAL_ENABLED()            (true)
-#elif !defined(PXX1) || defined(PCBXLITES) || defined(PCBX9LITE)
-  #define IS_PXX2_INTERNAL_ENABLED()            (true)
-  #define IS_PXX1_INTERNAL_ENABLED()            (false)
-#elif defined(INTERNAL_MODULE_PXX1)
-  #define IS_PXX2_INTERNAL_ENABLED()            (false)
-  #define IS_PXX1_INTERNAL_ENABLED()            (true)
-#else
-  // TODO #define PXX2_PROBE
-  // TODO #define IS_PXX2_INTERNAL_ENABLED()            (hardwareOptions.pxx2Enabled)
-  #define IS_PXX2_INTERNAL_ENABLED()            (true)
-  #define IS_PXX1_INTERNAL_ENABLED()            (true)
-#endif
-
-enum CalibratedAnalogs {
-  CALIBRATED_STICK1,
-  CALIBRATED_STICK2,
-  CALIBRATED_STICK3,
-  CALIBRATED_STICK4,
-  CALIBRATED_POT_FIRST,
-  CALIBRATED_POT_LAST = CALIBRATED_POT_FIRST + NUM_POTS - 1,
-  CALIBRATED_SLIDER_FIRST,
-  CALIBRATED_SLIDER_LAST = CALIBRATED_SLIDER_FIRST + NUM_SLIDERS - 1,
-  NUM_CALIBRATED_ANALOGS
-};
-
-#if defined(PCBX9D)
-  #define IS_POT(x)                     ((x)>=POT_FIRST && (x)<=POT2) // POT3 is only defined in software
-#else
-  #define IS_POT(x)                     ((x)>=POT_FIRST && (x)<=POT_LAST)
-#endif
-
-#define IS_SLIDER(x)                    ((x)>POT_LAST && (x)<TX_VOLTAGE)
-
-extern uint16_t adcValues[NUM_ANALOGS];
 
 // Battery driver
 #if defined(PCBX9E)
@@ -695,15 +160,19 @@ extern uint16_t adcValues[NUM_ANALOGS];
   #define BATTERY_WARN                  87 // 8.7V
   #define BATTERY_MIN                   85 // 8.5V
   #define BATTERY_MAX                   115 // 11.5V
-#elif defined(PCBXLITE)
+#elif defined(PCBXLITE) || defined(RADIO_FAMILY_T20)
   // 2 x Li-Ion
   #define BATTERY_WARN                  66 // 6.6V
   #define BATTERY_MIN                   67 // 6.7V
   #define BATTERY_MAX                   83 // 8.3V
-#elif defined(RADIO_T8) || defined(RADIO_TLITE)
+#elif defined(RADIO_T8) || defined(RADIO_TLITE) || defined(RADIO_LR3PRO)
   // 1S Li-ion /  Lipo, LDO for 3.3V
   #define BATTERY_WARN                  35 // 3.5V
   #define BATTERY_MIN                   34 // 3.4V
+  #define BATTERY_MAX                   42 // 4.2V
+#elif defined(RADIO_COMMANDO8)
+  #define BATTERY_WARN                  32 // 3.5V
+  #define BATTERY_MIN                   30 // 3.0V
   #define BATTERY_MAX                   42 // 4.2V
 #else
   // NI-MH 7.2V
@@ -730,128 +199,51 @@ extern "C" {
 
 // Power driver
 #define SOFT_PWR_CTRL
+#if defined(PWR_BUTTON_PRESS) && !defined(RADIO_COMMANDO8)
+#  define STARTUP_ANIMATION
+#endif
+
 void pwrInit();
 uint32_t pwrCheck();
 void pwrOn();
 void pwrOff();
 bool pwrPressed();
-#if defined(PWR_BUTTON_PRESS)
-#define STARTUP_ANIMATION
-uint32_t pwrPressedDuration();
-#endif
+bool pwrOffPressed();
 void pwrResetHandler();
 #define pwrForcePressed()   false
 
-#if defined(SIMU)
-#define UNEXPECTED_SHUTDOWN()           false
-#else
-#define UNEXPECTED_SHUTDOWN()           (WAS_RESET_BY_WATCHDOG() || g_eeGeneral.unexpectedShutdown)
-#endif
-
 // Backlight driver
-void backlightInit();
-void backlightDisable();
+#if defined(OLED_SCREEN)
+#define BACKLIGHT_DISABLE()             lcdSetRefVolt(0)
+#define BACKLIGHT_FORCED_ON             255
+#else
 #define BACKLIGHT_DISABLE()             backlightDisable()
 #define BACKLIGHT_FORCED_ON             101
-uint8_t isBacklightEnabled();
-#if !defined(__cplusplus)
-  #define backlightEnable(...)
-#elif defined(PCBX9E) || defined(PCBX9DP)
-  void backlightEnable(uint8_t level = 0, uint8_t color = 0);
-  #define BACKLIGHT_ENABLE()            backlightEnable(currentBacklightBright, g_eeGeneral.backlightColor)
-#else
-  void backlightEnable(uint8_t level = 0);
-  #define BACKLIGHT_ENABLE()            backlightEnable(currentBacklightBright)
 #endif
 
-#if !defined(SIMU)
-  void usbJoystickUpdate();
-#endif
-#if defined(RADIO_TX12)
-  #define USB_NAME                     "Radiomaster TX12"
-  #define USB_MANUFACTURER             'R', 'M', '_', 'T', 'X', ' ', ' ', ' '  /* 8 bytes */
-  #define USB_PRODUCT                  'R', 'M', ' ', 'T', 'X', '1', '2', ' '  /* 8 Bytes */
-#elif defined(RADIO_ZORRO)
-  #define USB_NAME                     "Radiomaster Zorro"
-  #define USB_MANUFACTURER             'R', 'M', '_', 'T', 'X', ' ', ' ', ' '  /* 8 bytes */
-  #define USB_PRODUCT                  'R', 'M', ' ', 'Z', 'O', 'R', 'R', 'O'  /* 8 Bytes */
-#elif defined(RADIO_T8)
-  #define USB_NAME                     "Radiomaster T8"
-  #define USB_MANUFACTURER             'R', 'M', '_', 'T', 'X', ' ', ' ', ' '  /* 8 bytes */
-  #define USB_PRODUCT                  'R', 'M', ' ', 'T', '8', ' ', ' ', ' '  /* 8 Bytes */
-#elif defined(RADIO_TLITE)
-  #define USB_NAME                     "Jumper TLite"
-  #define USB_MANUFACTURER             'J', 'U', 'M', 'P', 'E', 'R', ' ', ' '  /* 8 bytes */
-  #define USB_PRODUCT                  'T', '-', 'L', 'I', 'T', 'E', ' ', ' '  /* 8 Bytes */
-#elif defined(RADIO_TPRO)
-  #define USB_NAME                     "Jumper TPro"
-  #define USB_MANUFACTURER             'J', 'U', 'M', 'P', 'E', 'R', ' ', ' '  /* 8 bytes */
-  #define USB_PRODUCT                  'T', '-', 'P', 'R', 'O', ' ', ' ', ' '  /* 8 Bytes */
+
+void backlightInit();
+void backlightDisable();
+void backlightFullOn();
+uint8_t isBacklightEnabled();
+
+#if defined(PCBX9E) || defined(PCBX9DP)
+  void backlightEnable(uint8_t level, uint8_t color);
+  #define BACKLIGHT_ENABLE() \
+    backlightEnable(currentBacklightBright, g_eeGeneral.backlightColor)
+#elif defined(OLED_SCREEN)
+  #define BACKLIGHT_ENABLE() lcdSetRefVolt(currentBacklightBright)
 #else
-  #define USB_NAME                     "FrSky Taranis"
-  #define USB_MANUFACTURER             'F', 'r', 'S', 'k', 'y', ' ', ' ', ' '  /* 8 bytes */
-  #define USB_PRODUCT                  'T', 'a', 'r', 'a', 'n', 'i', 's', ' '  /* 8 Bytes */
+  void backlightEnable(uint8_t level);
+  #define BACKLIGHT_ENABLE() backlightEnable(currentBacklightBright)
 #endif
 
 #if defined(__cplusplus) && !defined(SIMU)
 }
 #endif
 
-// I2C driver: EEPROM + Audio Volume
-#define EEPROM_SIZE                   (32*1024)
-
-void i2cInit();
-void eepromReadBlock(uint8_t * buffer, size_t address, size_t size);
-void eepromStartWrite(uint8_t * buffer, size_t address, size_t size);
-uint8_t eepromIsTransferComplete();
-
 // Debug driver
 void debugPutc(const char c);
-
-// Telemetry driver
-void telemetryPortInit(uint32_t baudrate, uint8_t mode);
-void telemetryPortSetDirectionInput();
-void telemetryPortSetDirectionOutput();
-void sportSendByte(uint8_t byte);
-void sportSendByteLoop(uint8_t byte);
-void sportStopSendByteLoop();
-void sportSendBuffer(const uint8_t * buffer, uint32_t count);
-bool telemetryGetByte(uint8_t * byte);
-void telemetryClearFifo();
-extern uint32_t telemetryErrors;
-
-// soft-serial
-void telemetryPortInvertedInit(uint32_t baudrate);
-
-// PCBREV driver
-#if defined(PCBX7ACCESS)
-  #define HAS_SPORT_UPDATE_CONNECTOR()  true
-#elif defined(PCBX7)
-  #define IS_PCBREV_40()                (hardwareOptions.pcbrev == PCBREV_X7_40)
-  #define HAS_SPORT_UPDATE_CONNECTOR()  IS_PCBREV_40()
-#elif defined(SPORT_UPDATE_PWR_GPIO)
-  #define HAS_SPORT_UPDATE_CONNECTOR()  true
-#else
-  #define HAS_SPORT_UPDATE_CONNECTOR()  false
-#endif
-
-// Sport update driver
-#if defined(SPORT_UPDATE_PWR_GPIO)
-void sportUpdateInit();
-void sportUpdatePowerOn();
-void sportUpdatePowerOff();
-void sportUpdatePowerInit();
-#define SPORT_UPDATE_POWER_ON()         sportUpdatePowerOn()
-#define SPORT_UPDATE_POWER_OFF()        sportUpdatePowerOff()
-#define SPORT_UPDATE_POWER_INIT()       sportUpdatePowerInit()
-#define IS_SPORT_UPDATE_POWER_ON()      (GPIO_ReadInputDataBit(SPORT_UPDATE_PWR_GPIO, SPORT_UPDATE_PWR_GPIO_PIN) == Bit_SET)
-#else
-#define sportUpdateInit()
-#define SPORT_UPDATE_POWER_ON()
-#define SPORT_UPDATE_POWER_OFF()
-#define SPORT_UPDATE_POWER_INIT()
-#define IS_SPORT_UPDATE_POWER_ON()      (false)
-#endif
 
 // Audio driver
 void audioInit() ;
@@ -901,53 +293,19 @@ void hapticOff();
   void hapticOn();
 #endif
 
-// Aux serial port driver
-#if defined(AUX_SERIAL_GPIO)
 #define DEBUG_BAUDRATE                  115200
 #define LUA_DEFAULT_BAUDRATE            115200
-#define AUX_SERIAL
-extern uint8_t auxSerialMode;
-#if defined __cplusplus
-void auxSerialSetup(unsigned int baudrate, bool dma, uint16_t length = USART_WordLength_8b, uint16_t parity = USART_Parity_No, uint16_t stop = USART_StopBits_1);
-#endif
-void auxSerialInit(unsigned int mode, unsigned int protocol);
-void auxSerialPutc(char c);
-#define auxSerialTelemetryInit(protocol) auxSerialInit(UART_MODE_TELEMETRY, protocol)
-void auxSerialSbusInit();
-void auxSerialStop();
-#define AUX_SERIAL_POWER_ON()
-#define AUX_SERIAL_POWER_OFF()
-#endif
 
-// BT driver
-#define BLUETOOTH_BOOTLOADER_BAUDRATE   230400
-#define BLUETOOTH_DEFAULT_BAUDRATE      115200
-#if defined(PCBX9E)
-#define BLUETOOTH_FACTORY_BAUDRATE      9600
-#else
-#define BLUETOOTH_FACTORY_BAUDRATE      57600
-#endif
-#define BT_TX_FIFO_SIZE    64
-#define BT_RX_FIFO_SIZE    256
-void bluetoothInit(uint32_t baudrate, bool enable);
-void bluetoothWriteWakeup();
-uint8_t bluetoothIsWriting();
-void bluetoothDisable();
-#if defined(PCBX9LITES) || defined(PCBX7ACCESS)
-  #define IS_BLUETOOTH_CHIP_PRESENT()     (true)
-#elif defined(PCBX9LITE)
-  #define IS_BLUETOOTH_CHIP_PRESENT()     (false)
-#elif defined(BLUETOOTH_PROBE) && !defined(SIMU)
-  extern volatile uint8_t btChipPresent;
-  #define IS_BLUETOOTH_CHIP_PRESENT()     (btChipPresent)
-#else
-  #define IS_BLUETOOTH_CHIP_PRESENT()     (true)
-#endif
+const etx_serial_port_t* auxSerialGetPort(int port_nr);
 
 // USB Charger
 #if defined(USB_CHARGER)
 void usbChargerInit();
 bool usbChargerLed();
+#endif
+
+#if defined(RADIO_V14) || defined(RADIO_V12)
+  uint16_t getSixPosAnalogValue(uint16_t adcValue);
 #endif
 
 // LED driver
@@ -956,10 +314,6 @@ void ledOff();
 void ledRed();
 void ledGreen();
 void ledBlue();
-#if defined(FUNCTION_SWITCHES)
-void fsLedOff(uint8_t);
-void fsLedOn(uint8_t);
-#endif
 
 // LCD driver
 #if defined(PCBX9D) || defined(PCBX9DP) || defined(PCBX9E)
@@ -974,14 +328,32 @@ void fsLedOn(uint8_t);
 #define LCD_H                           64
 #define LCD_DEPTH                       1
 #define IS_LCD_RESET_NEEDED()           true
+#if defined(OLED_SCREEN)
+#define LCD_CONTRAST_MIN                2
+#define LCD_CONTRAST_MAX                254
+#else
 #define LCD_CONTRAST_MIN                10
 #define LCD_CONTRAST_MAX                30
-#if defined(RADIO_TX12)
+#endif
+
+#if defined(RADIO_MT12)
+#define LCD_BRIGHTNESS_DEFAULT          50
+#elif defined(RADIO_T12MAX)
+#define LCD_BRIGHTNESS_DEFAULT          30
+#endif
+
+#if defined(OLED_SCREEN)
+  #define LCD_CONTRAST_DEFAULT          254 // full brightness
+#elif defined(RADIO_TX12) || defined(RADIO_TX12MK2) || defined(RADIO_BOXER) || defined(RADIO_MT12)
   #define LCD_CONTRAST_DEFAULT          20
-#elif defined(RADIO_TPRO) || defined(RADIO_FAMILY_JUMPER_T12) || defined(RADIO_TPRO)
+#elif defined(RADIO_TPRO) || defined(RADIO_FAMILY_JUMPER_T12) || defined(RADIO_TPRO) || defined(RADIO_COMMANDO8) || defined(RADIO_T12MAX)
   #define LCD_CONTRAST_DEFAULT          25
 #else
   #define LCD_CONTRAST_DEFAULT          15
+#endif
+#if defined(OLED_SCREEN)
+  // add offset 2px because driver (SH1106) of the 1.3 OLED is for a 132 display
+  #define LCD_W_OFFSET                  0x02
 #endif
 #endif
 
@@ -995,8 +367,8 @@ void lcdInit();
 void lcdInitFinish();
 void lcdOff();
 
-// TODO lcdRefreshWait() stub in simpgmspace and remove LCD_DUAL_BUFFER
-#if defined(LCD_DMA) && !defined(LCD_DUAL_BUFFER) && !defined(SIMU)
+// TODO lcdRefreshWait() stub in simpgmspace
+#if defined(LCD_DMA) && !defined(SIMU)
 void lcdRefreshWait();
 #else
 #define lcdRefreshWait()
@@ -1007,9 +379,13 @@ void lcdRefresh();
 void lcdRefresh(bool wait=true); // TODO uint8_t wait to simplify this
 #endif
 void lcdSetRefVolt(unsigned char val);
+#if LCD_W == 128
+void lcdSetInvert(bool invert);
+#endif
 #ifdef __cplusplus
 void lcdSetContrast(bool useDefault = false);
 #endif
+void lcdFlushed();
 
 // Top LCD driver
 #if defined(TOPLCD_GPIO)
@@ -1024,31 +400,41 @@ void setTopBatteryState(int state, uint8_t blinking);
 void setTopBatteryValue(uint32_t volts);
 #endif
 
-#define USART_FLAG_ERRORS (USART_FLAG_ORE | USART_FLAG_NE | USART_FLAG_FE | USART_FLAG_PE)
-
-#if defined(__cplusplus)
-#include "fifo.h"
-#include "dmafifo.h"
-
 #if defined(CROSSFIRE)
 #define TELEMETRY_FIFO_SIZE             128
 #else
 #define TELEMETRY_FIFO_SIZE             64
 #endif
 
-extern Fifo<uint8_t, TELEMETRY_FIFO_SIZE> telemetryFifo;
-typedef DMAFifo<32> AuxSerialRxFifo;
-extern AuxSerialRxFifo auxSerialRxFifo;
+#define INTMODULE_FIFO_SIZE            128
+
+#if defined(MANUFACTURER_RADIOMASTER) || defined(MANUFACTURER_JUMPER)
+// --- MOSFET ---- R2 --- MCU
+//                     |__ R1 --- GND
+//
+#define VBAT_DIV_R1       160 // kOhms
+#define VBAT_DIV_R2       499 // kOhms
+#if defined(MANUFACTURER_JUMPER)
+#define VBAT_MOSFET_DROP   50 // * 10mV
+#else
+#define VBAT_MOSFET_DROP   25 // * 10mV
+#endif
+#else //--- MOSFET ---- R2 --- MCU
+#if defined (RADIO_T8) || defined(RADIO_COMMANDO8)
+  #define BATTERY_DIVIDER 50000
+#elif defined (RADIO_LR3PRO)
+  #define BATTERY_DIVIDER 39500
+#else
+  #define BATTERY_DIVIDER 26214
+#endif 
+#define VOLTAGE_DROP 20
+#endif //--- MOSFET ---- R2 --- MCU
+
+#if defined(RADIO_FAMILY_T20)
+#define NUM_TRIMS                               8
+#else
+#define NUM_TRIMS                               4
 #endif
 
-// Gyro driver
-#define GYRO_VALUES_COUNT               6
-#define GYRO_BUFFER_LENGTH              (GYRO_VALUES_COUNT * sizeof(int16_t))
-int gyroInit();
-int gyroRead(uint8_t buffer[GYRO_BUFFER_LENGTH]);
-#define GYRO_MAX_DEFAULT                30
-#define GYRO_MAX_RANGE                  60
-#define GYRO_OFFSET_MIN                 -30
-#define GYRO_OFFSET_MAX                 10
+#define NUM_TRIMS_KEYS                          (NUM_TRIMS * 2)
 
-#endif // _BOARD_H_

@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -21,22 +22,17 @@
 #include "yaml_customfunctiondata.h"
 #include "yaml_rawswitch.h"
 #include "yaml_rawsource.h"
-
-static bool fnHasEnable(AssignFunc fn)
-{
-  return (fn <= FuncInstantTrim)
-    || (fn >= FuncReset && fn <= FuncSetTimerLast)
-    || (fn >= FuncAdjustGV1 && fn <= FuncBindExternalModule)
-    || (fn == FuncVolume)
-    || (fn == FuncBacklight);
-}
+#include "eeprominterface.h"
 
 static bool fnHasRepeat(AssignFunc fn)
 {
   return (fn == FuncPlayPrompt)
     || (fn == FuncPlayValue)
     || (fn == FuncPlayHaptic)
-    || (fn == FuncPlaySound);
+    || (fn == FuncPlaySound)
+    || (fn == FuncSetScreen)
+    || (fn == FuncPlayScript)
+    || (fn == FuncRGBLed);
 }
 
 static const YamlLookupTable customFnLut = {
@@ -63,6 +59,11 @@ static const YamlLookupTable customFnLut = {
   {  FuncScreenshot, "SCREENSHOT"  },
   {  FuncRacingMode, "RACING_MODE"  },
   {  FuncDisableTouch, "DISABLE_TOUCH"  },
+  {  FuncSetScreen, "SET_SCREEN"},
+  {  FuncDisableAudioAmp, "DISABLE_AUDIO_AMP"  },
+  {  FuncRGBLed, "RGB_LED"  },
+  {  FuncLCDtoVideo, "LCD_TO_VIDEO"  },
+  {  FuncPushCustomSwitch1, "PUSH_CUST_SWITCH"  },
 };
 
 static const YamlLookupTable trainerLut = {
@@ -99,11 +100,13 @@ static const YamlLookupTable resetLut = {
   { 2, "Tmr3" },
   { 3, "All" },
   { 4, "Tele" },
+  { 5, "Trims" },
 };
 
 static const YamlLookupTable gvarModeLut = {
   { FUNC_ADJUST_GVAR_CONSTANT, "Cst" },
   { FUNC_ADJUST_GVAR_SOURCE, "Src" },
+  { FUNC_ADJUST_GVAR_SOURCERAW, "SrcRaw" },
   { FUNC_ADJUST_GVAR_GVAR, "GVar" },
   { FUNC_ADJUST_GVAR_INCDEC, "IncDec" },
 };
@@ -122,7 +125,8 @@ Node convert<CustomFunctionData>::encode(const CustomFunctionData& rhs)
 
   int fn = rhs.func;
   int p1 = 0;
-  if(fn >= FuncOverrideCH1 && fn <= FuncOverrideCHLast) {
+
+  if (fn >= FuncOverrideCH1 && fn <= FuncOverrideCHLast) {
     p1 = fn - (int)FuncOverrideCH1;
     fn = (int)FuncOverrideCH1;
   } else if (fn >= FuncTrainer && fn <= FuncTrainerChannels) {
@@ -140,7 +144,11 @@ Node convert<CustomFunctionData>::encode(const CustomFunctionData& rhs)
   } else if (fn >= FuncBindInternalModule && fn <= FuncBindExternalModule) {
     p1 = fn - (int)FuncBindInternalModule;
     fn = (int)FuncBindInternalModule;
+  } else if (fn >= FuncPushCustomSwitch1 && fn <= FuncPushCustomSwitchLast) {
+    p1 = fn - (int)FuncPushCustomSwitch1;
+    fn = (int)FuncPushCustomSwitch1;
   }
+
   node["func"] = LookupValue(customFnLut, fn);
 
   bool add_comma = true;
@@ -161,8 +169,13 @@ Node convert<CustomFunctionData>::encode(const CustomFunctionData& rhs)
     def += std::to_string(rhs.param);
     break;
   case FuncPlayPrompt:
+  case FuncBackgroundMusic: {
+    std::string temp(rhs.paramarm);
+    temp.resize(getCurrentFirmware()->getCapability(VoicesMaxLength));
+    def += temp;
+  } break;
   case FuncPlayScript:
-  case FuncBackgroundMusic:
+  case FuncRGBLed:
     def += std::string(rhs.paramarm);
     break;
   case FuncReset:
@@ -194,7 +207,8 @@ Node convert<CustomFunctionData>::encode(const CustomFunctionData& rhs)
       def += std::to_string(rhs.param);
       break;
     case FUNC_ADJUST_GVAR_GVAR:
-    case FUNC_ADJUST_GVAR_SOURCE: {
+    case FUNC_ADJUST_GVAR_SOURCE:
+    case FUNC_ADJUST_GVAR_SOURCERAW: {
       def += YamlRawSourceEncode(RawSource(rhs.param));
     } break;
     }
@@ -206,21 +220,31 @@ Node convert<CustomFunctionData>::encode(const CustomFunctionData& rhs)
   case FuncLogs:
     def += std::to_string(rhs.param);
     break;
+  case FuncSetScreen:
+    def += std::to_string(rhs.param);
+    break;
+  case FuncPushCustomSwitch1:
+    def += std::to_string(p1);
+    def += ",";
+    def += std::to_string(rhs.param);
+    break;
   default:
     add_comma = false;
     break;
   }
 
-  if (fnHasEnable(rhs.func)) {
-    if (add_comma) {
-      def += ",";
-    }
-    def += std::to_string((int)rhs.enabled);
-  } else if(fnHasRepeat(rhs.func)) {
-    if (add_comma) {
-      def += ",";
-    }
-    if (rhs.repeatParam == 0) {
+  if (add_comma) {
+    def += ",";
+  }
+
+  def += std::to_string((int)rhs.enabled);
+
+  if(fnHasRepeat(rhs.func)) {
+    def += ",";
+
+    if (rhs.func == FuncPlayScript || rhs.func == FuncRGBLed) {
+      def += ((rhs.repeatParam == 0) ? "On" : "1x");
+    } else if (rhs.repeatParam == 0) {
       def += "1x";
     } else if (rhs.repeatParam == -1) {
       def += "!1x";
@@ -251,18 +275,18 @@ bool convert<CustomFunctionData>::decode(const Node& node,
 
   switch(rhs.func) {
   case FuncOverrideCH1: {
-      int ch=0;
-      def >> ch;
-      rhs.func = (AssignFunc)((int)rhs.func + ch);
-      def.ignore();
-      def >> rhs.param;
+    int ch=0;
+    def >> ch;
+    rhs.func = (AssignFunc)((int)rhs.func + ch);
+    def.ignore();
+    def >> rhs.param;
   } break;
   case FuncTrainer: {
-      std::string value_str;
-      getline(def, value_str, ',');
-      int value=0;
-      Node(value_str) >> trainerLut >> value;
-      rhs.func = (AssignFunc)((int)rhs.func + value);
+    std::string value_str;
+    getline(def, value_str, ',');
+    int value=0;
+    Node(value_str) >> trainerLut >> value;
+    rhs.func = (AssignFunc)((int)rhs.func + value);
   } break;
   case FuncPlaySound: {
     std::string snd;
@@ -277,11 +301,17 @@ bool convert<CustomFunctionData>::decode(const Node& node,
     } catch(...) {}
   } break;
   case FuncPlayPrompt:
-  case FuncPlayScript:
   case FuncBackgroundMusic: {
     std::string file_str;
     getline(def, file_str, ',');
-    strncpy(rhs.paramarm, file_str.c_str(), sizeof(rhs.paramarm)-1);
+    file_str.resize(getCurrentFirmware()->getCapability(VoicesMaxLength));
+    strncpy(rhs.paramarm, file_str.c_str(), sizeof(rhs.paramarm) - 1);
+    } break;
+  case FuncRGBLed:
+  case FuncPlayScript: {
+    std::string file_str;
+    getline(def, file_str, ',');
+    strncpy(rhs.paramarm, file_str.c_str(), sizeof(rhs.paramarm) - 1);
     } break;
   case FuncReset: {
     std::string rst_str;
@@ -307,6 +337,11 @@ bool convert<CustomFunctionData>::decode(const Node& node,
   case FuncBacklight: {
     std::string src_str;
     getline(def, src_str, ',');
+    if (def_str.size() >= 4 && def_str.substr(0, 4) == "lua(") {
+      std::string tmp_str;
+      getline(def, tmp_str, ',');
+      src_str += ("," + tmp_str);
+    }
     rhs.param = YamlRawSourceDecode(src_str).toValue();
   } break;
   case FuncAdjustGV1: {
@@ -325,7 +360,8 @@ bool convert<CustomFunctionData>::decode(const Node& node,
       def >> rhs.param;
       break;
     case FUNC_ADJUST_GVAR_GVAR:
-    case FUNC_ADJUST_GVAR_SOURCE: {
+    case FUNC_ADJUST_GVAR_SOURCE:
+    case FUNC_ADJUST_GVAR_SOURCERAW: {
       std::string src_str;
       getline(def, src_str, ',');
       RawSource src;
@@ -349,6 +385,20 @@ bool convert<CustomFunctionData>::decode(const Node& node,
     def >> param;
     rhs.param = param;
   } break;
+  case FuncSetScreen: {
+    int param = 0;
+    def >> param;
+    rhs.param = param;
+  } break;
+  case FuncPushCustomSwitch1: {
+    int sw = 0;
+    def >> sw;
+    rhs.func = (AssignFunc)((int)rhs.func + sw);
+    def.ignore();
+    int param = 0;
+    def >> param;
+    rhs.param = param;
+  } break;
   default:
     break;
   }
@@ -357,14 +407,30 @@ bool convert<CustomFunctionData>::decode(const Node& node,
     def.ignore();
   }
 
-  if (fnHasEnable(rhs.func)) {
-    int en = 0;
-    def >> en;
-    rhs.enabled = en;
-  } else if(fnHasRepeat(rhs.func)) {
-    std::string repeat;
-    getline(def, repeat);
-    if (repeat == "1x") {
+  // Need to handle older YAML files where only one of enabled/repeat was present
+  std::string en, repeat;
+  getline(def, en, ',');
+  getline(def, repeat);
+
+  if (repeat.empty()) {
+    // Only one value left to parse
+    if (fnHasRepeat(rhs.func)) {
+      // Assume it is repeat and set enabled to true
+      repeat = en;
+      rhs.enabled = 1;
+    } else {
+      // Func does not have repeat
+      rhs.enabled = en[0] == '1' ? 1 : 0;
+    }
+  } else {
+    // Two values - first is 'enabled' flag
+    rhs.enabled = en[0] == '1' ? 1 : 0;
+  }
+
+  if(fnHasRepeat(rhs.func)) {
+    if (rhs.func == FuncPlayScript || rhs.func == FuncRGBLed) {
+      rhs.repeatParam = (repeat == "1x") ? 1 : 0;
+    } else if (repeat == "1x") {
       rhs.repeatParam = 0;
     } else if (repeat == "!1x") {
       rhs.repeatParam = -1;

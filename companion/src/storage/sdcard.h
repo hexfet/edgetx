@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -18,20 +19,19 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _SDCARD_H2_
-#define _SDCARD_H2_
+#pragma once
 
-#include "categorized.h"
+#include "labeled.h"
 
 #include <QtCore>
 
-class SdcardFormat : public CategorizedStorageFormat
+class SdcardFormat : public LabelsStorageFormat
 {
   Q_DECLARE_TR_FUNCTIONS(SdcardFormat)
 
   public:
     SdcardFormat(const QString & filename):
-      CategorizedStorageFormat(filename)
+      LabelsStorageFormat(filename)
     {
     }
 
@@ -42,6 +42,7 @@ class SdcardFormat : public CategorizedStorageFormat
     virtual bool loadFile(QByteArray & fileData, const QString & fileName);
     virtual bool writeFile(const QByteArray & fileData, const QString & fileName);
     virtual bool getFileList(std::list<std::string>& filelist);
+    virtual bool deleteFile(const QString & fileName);
 };
 
 class SdcardStorageFactory : public DefaultStorageFactory<SdcardFormat>
@@ -54,5 +55,3 @@ class SdcardStorageFactory : public DefaultStorageFactory<SdcardFormat>
 
     virtual bool probe(const QString & name);
 };
-
-#endif // _SDCARD_H2_

@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -31,6 +32,7 @@
 #ifdef JOYSTICKS
 #include "joystickdialog.h"
 #endif
+#include "serialportsdialog.h"
 
 #include <QDebug>
 #include <QDir>
@@ -41,7 +43,7 @@ extern AppData g;  // ensure what "g" means
 
 const quint16 SimulatorMainWindow::m_savedUiStateVersion = 2;
 
-SimulatorMainWindow::SimulatorMainWindow(QWidget *parent, const QString & firmwareId, quint8 flags, Qt::WindowFlags wflags) :
+SimulatorMainWindow::SimulatorMainWindow(QWidget *parent, const QString & simulatorId, quint8 flags, Qt::WindowFlags wflags) :
   QMainWindow(parent, wflags),
   ui(new Ui::SimulatorMainWindow),
   m_simulatorWidget(NULL),
@@ -52,7 +54,7 @@ SimulatorMainWindow::SimulatorMainWindow(QWidget *parent, const QString & firmwa
   m_telemetryDockWidget(NULL),
   m_trainerDockWidget(NULL),
   m_outputsDockWidget(NULL),
-  m_simulatorId(firmwareId),
+  m_simulatorId(simulatorId),
   m_exitStatusCode(0),
   m_radioProfileId(g.sessionId()),
   m_radioSizeConstraint(Qt::Horizontal | Qt::Vertical),
@@ -61,7 +63,7 @@ SimulatorMainWindow::SimulatorMainWindow(QWidget *parent, const QString & firmwa
   m_showMenubar(true)
 {
   if (m_simulatorId.isEmpty()) {
-    m_simulatorId = SimulatorLoader::findSimulatorByFirmwareName(getCurrentFirmware()->getId());
+    m_simulatorId = SimulatorLoader::findSimulatorByName(getCurrentFirmware()->getSimulatorId());
   }
   m_simulator = SimulatorLoader::loadSimulator(m_simulatorId);
   if (!m_simulator) {
@@ -80,6 +82,8 @@ SimulatorMainWindow::SimulatorMainWindow(QWidget *parent, const QString & firmwa
 
   m_simulator->moveToThread(&simuThread);
   simuThread.start();
+
+  hostSerialConnector = new HostSerialConnector(this, m_simulator);
 
   ui->setupUi(this);
 
@@ -129,7 +133,9 @@ SimulatorMainWindow::SimulatorMainWindow(QWidget *parent, const QString & firmwa
   setStyleSheet(SimulatorStyle::styleSheet());
 
   connect(ui->actionShowKeymap, &QAction::triggered, this, &SimulatorMainWindow::showHelp);
+  connect(ui->actionAbout, &QAction::triggered, this, &SimulatorMainWindow::showAbout);
   connect(ui->actionJoystickSettings, &QAction::triggered, this, &SimulatorMainWindow::openJoystickDialog);
+  connect(ui->actionSerialPorts, &QAction::triggered, this, &SimulatorMainWindow::openSerialPortsDialog);
   connect(ui->actionToggleMenuBar, &QAction::toggled, this, &SimulatorMainWindow::showMenuBar);
   connect(ui->actionFixedRadioWidth, &QAction::toggled, this, &SimulatorMainWindow::showRadioFixedWidth);
   connect(ui->actionFixedRadioHeight, &QAction::toggled, this, &SimulatorMainWindow::showRadioFixedHeight);
@@ -149,6 +155,12 @@ SimulatorMainWindow::SimulatorMainWindow(QWidget *parent, const QString & firmwa
     connect(ui->actionScreenshot, &QAction::triggered, m_simulatorWidget, &SimulatorWidget::captureScreenshot);
     connect(m_simulatorWidget, &SimulatorWidget::windowTitleChanged, this, &SimulatorMainWindow::setWindowTitle);
   }
+
+  connect(m_simulator, &SimulatorInterface::auxSerialSendData, hostSerialConnector, &HostSerialConnector::sendSerialData);
+  connect(m_simulator, &SimulatorInterface::auxSerialSetEncoding, hostSerialConnector, &HostSerialConnector::setSerialEncoding);
+  connect(m_simulator, &SimulatorInterface::auxSerialSetBaudrate, hostSerialConnector, &HostSerialConnector::setSerialBaudRate);
+  connect(m_simulator, &SimulatorInterface::auxSerialStart, hostSerialConnector, &HostSerialConnector::serialStart);
+  connect(m_simulator, &SimulatorInterface::auxSerialStop, hostSerialConnector, &HostSerialConnector::serialStop);
 }
 
 SimulatorMainWindow::~SimulatorMainWindow()
@@ -170,6 +182,8 @@ SimulatorMainWindow::~SimulatorMainWindow()
     }
     delete m_simulator;
   }
+
+  delete hostSerialConnector;
   SimulatorLoader::unloadSimulator(m_simulatorId);
 }
 
@@ -469,6 +483,16 @@ void SimulatorMainWindow::openJoystickDialog(bool)
 #endif
 }
 
+void SimulatorMainWindow::openSerialPortsDialog(bool)
+{
+  SerialPortsDialog * dialog = new SerialPortsDialog(this, m_simulator, hostSerialConnector);
+  if (dialog->exec() == QDialog::Accepted && m_simulator) {
+    hostSerialConnector->connectSerialPort(0, dialog->aux1);
+    hostSerialConnector->connectSerialPort(1, dialog->aux2);
+  }
+  dialog->deleteLater();
+}
+
 void SimulatorMainWindow::showHelp(bool show)
 {
   QString helpText = ""
@@ -502,4 +526,32 @@ void SimulatorMainWindow::showHelp(bool show)
   msgBox->setText(helpText);
   msgBox->setModal(false);
   msgBox->show();
+}
+
+void SimulatorMainWindow::showAbout(bool show)
+{
+  QString aboutStr = "<center><img src=\":/images/simulator-title.png\"></center><br/>";
+  aboutStr.append(tr("EdgeTX Home Page: <a href='%1'>%1</a>").arg(EDGETX_HOME_PAGE_URL));
+  aboutStr.append("<br/><br/>");
+  aboutStr.append(tr("The EdgeTX project was originally forked from <a href='%1'>OpenTX</a>").arg("https://github.com/opentx/opentx"));
+  aboutStr.append("<br/><br/>");
+  aboutStr.append(tr("If you've found this program useful, please support by <a href='%1'>donating</a>").arg(EDGETX_DONATE_URL));
+  aboutStr.append("<br/><br/>");
+#if defined(VERSION_TAG)
+  aboutStr.append(QString("Version %1 \"%2\", %3").arg(VERSION_TAG).arg(CODENAME).arg(__DATE__));
+#else
+  aboutStr.append(QString("Version %1-%2, %3").arg(VERSION).arg(VERSION_SUFFIX).arg(__DATE__));
+  aboutStr.append("<br/>");
+  aboutStr.append(QString("Commit <a href='%1'>%2</a>").arg(EDGETX_COMMIT_URL % GIT_STR).arg(GIT_STR));
+#endif
+  aboutStr.append("<br/><br/>");
+  aboutStr.append(tr("File new <a href='%1'>Issue or Request</a>").arg(EDGETX_ISSUES_URL));
+  aboutStr.append("<br/><br/>");
+  aboutStr.append(tr("Copyright") + QString(" &copy; 2021-%1 EdgeTX<br/>").arg(BUILD_YEAR));
+
+  QMessageBox msgBox(this);
+  msgBox.setWindowIcon(CompanionIcon("information.png"));
+  msgBox.setWindowTitle(tr("About EdgeTX Simulator"));
+  msgBox.setText(aboutStr);
+  msgBox.exec();
 }

@@ -22,83 +22,91 @@
 #include "layout.h"
 #include "layout_factory_impl.h"
 
-const uint8_t LBM_LAYOUT_2x4[] = {
-#include "mask_layout2x4.lbm"
-};
-
 const ZoneOption OPTIONS_LAYOUT_2x4[] = {
-  LAYOUT_COMMON_OPTIONS,
-  { "Panel1 background", ZoneOption::Bool },
-  { "  Color", ZoneOption::Color },
-  { "Panel2 background", ZoneOption::Bool },
-  { "  Color", ZoneOption::Color },
-  LAYOUT_OPTIONS_END
-};
+    LAYOUT_COMMON_OPTIONS,
+    {"Panel1 background", ZoneOption::Bool, OPTION_VALUE_BOOL(true)},
+    {"  Color", ZoneOption::Color, RGB2FLAGS(77, 112, 203)},
+    {"Panel2 background", ZoneOption::Bool, OPTION_VALUE_BOOL(true)},
+    {"  Color", ZoneOption::Color, RGB2FLAGS(77, 112, 203)},
+    LAYOUT_OPTIONS_END};
 
-class Layout2x4: public Layout
+class Layout2x4 : public Layout
 {
-  public:
+ public:
+  enum {
+    OPTION_PANEL1_BACKGROUND = LAYOUT_OPTION_LAST_DEFAULT + 1,
+    OPTION_PANEL1_COLOR,
+    OPTION_PANEL2_BACKGROUND,
+    OPTION_PANEL2_COLOR
+  };
 
-    enum {
-      OPTION_PANEL1_BACKGROUND = LAYOUT_OPTION_LAST_DEFAULT + 1,
-      OPTION_PANEL1_COLOR,
-      OPTION_PANEL2_BACKGROUND,
-      OPTION_PANEL2_COLOR
-    };
-  
-    Layout2x4(const LayoutFactory * factory, Layout::PersistentData * persistentData):
-      Layout(factory, persistentData)
-    {
-    }
-
-    void create() override
-    {
-      Layout::create();
-      getOptionValue(OPTION_PANEL1_BACKGROUND)->boolValue = true;
-      getOptionValue(OPTION_PANEL1_COLOR)->unsignedValue  =  RGB(77,112,203);
-      getOptionValue(OPTION_PANEL2_BACKGROUND)->boolValue = true;
-      getOptionValue(OPTION_PANEL2_COLOR)->unsignedValue  =  RGB(77,112,203);
-    }
-
-    unsigned int getZonesCount() const override
-    {
-      return 8;
-    }
-
-    rect_t getZone(unsigned int index) const override
-    {
-      rect_t zone = getMainZone();
-
-      zone.w /= 2;
-      zone.h /= 4;
-
-      if ((!isMirrored() && index > 3)  || (isMirrored() && index < 4)) {
-        zone.x += zone.w;
-      }
-
-      zone.y += (index % 4) * zone.h;
-
-      return zone;
-    }
-
-    void paint(BitmapBuffer * dc) override;
-};
-
-void Layout2x4::paint(BitmapBuffer* dc)
-{
-  Layout::paint(dc);
-  rect_t fullScreen = Layout::getMainZone();
-  fullScreen.w /= 2;
-  if (getOptionValue(OPTION_PANEL1_BACKGROUND)->boolValue) {
-    dc->drawSolidFilledRect(fullScreen.x, fullScreen.y, fullScreen.w,
-                            fullScreen.h, COLOR2FLAGS(getOptionValue(OPTION_PANEL1_COLOR)->unsignedValue));
+  Layout2x4(Window* parent, const LayoutFactory* factory,
+            Layout::PersistentData* persistentData, uint8_t zoneCount,
+            uint8_t* zoneMap) :
+      Layout(parent, factory, persistentData, zoneCount, zoneMap)
+  {
+    panel1 = lv_obj_create(lvobj);
+    lv_obj_set_style_bg_opa(panel1, LV_OPA_COVER, LV_PART_MAIN);
+    panel2 = lv_obj_create(lvobj);
+    lv_obj_set_style_bg_opa(panel2, LV_OPA_COVER, LV_PART_MAIN);
+    setPanels();
   }
 
-  if (getOptionValue(OPTION_PANEL2_BACKGROUND)->boolValue) {
-    fullScreen.x += fullScreen.w;
-    dc->drawSolidFilledRect(fullScreen.x, fullScreen.y, fullScreen.w,
-                            fullScreen.h, COLOR2FLAGS(getOptionValue(OPTION_PANEL2_COLOR)->unsignedValue));
-  }
-}
+ protected:
+  rect_t mainZone = {0, 0, 0, 0};
+  lv_obj_t* panel1 = nullptr;
+  lv_obj_t* panel2 = nullptr;
+  LcdFlags panel1Color = -1;
+  LcdFlags panel2Color = -1;
 
-BaseLayoutFactory<Layout2x4> layout2x4("Layout2x4", "2 x 4", LBM_LAYOUT_2x4, OPTIONS_LAYOUT_2x4);
+  void checkEvents() override
+  {
+    setPanels();
+    Layout::checkEvents();
+  }
+
+  void setPanels()
+  {
+    rect_t zone = Layout::getMainZone();
+    if (mainZone.x != zone.x || mainZone.y != zone.y || mainZone.w != zone.w ||
+        mainZone.h != zone.h) {
+      mainZone = zone;
+      lv_obj_set_pos(panel1, mainZone.x, mainZone.y);
+      lv_obj_set_size(panel1, mainZone.w / 2, mainZone.h);
+      lv_obj_set_pos(panel2, mainZone.x + mainZone.w / 2, mainZone.y);
+      lv_obj_set_size(panel2, mainZone.w / 2, mainZone.h);
+    }
+
+    bool vis = getOptionValue(OPTION_PANEL1_BACKGROUND)->boolValue;
+    if (vis == lv_obj_has_flag(panel1, LV_OBJ_FLAG_HIDDEN)) {
+      if (vis)
+        lv_obj_clear_flag(panel1, LV_OBJ_FLAG_HIDDEN);
+      else
+        lv_obj_add_flag(panel1, LV_OBJ_FLAG_HIDDEN);
+    }
+    vis = getOptionValue(OPTION_PANEL2_BACKGROUND)->boolValue;
+    if (vis == lv_obj_has_flag(panel2, LV_OBJ_FLAG_HIDDEN)) {
+      if (vis)
+        lv_obj_clear_flag(panel2, LV_OBJ_FLAG_HIDDEN);
+      else
+        lv_obj_add_flag(panel2, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    etx_bg_color_from_flags(panel1, getOptionValue(OPTION_PANEL1_COLOR)->unsignedValue);
+    etx_bg_color_from_flags(panel2, getOptionValue(OPTION_PANEL2_COLOR)->unsignedValue);
+  }
+};
+
+static const uint8_t zmap[] = {
+    LAYOUT_MAP_0,    LAYOUT_MAP_0,    LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+    LAYOUT_MAP_0,    LAYOUT_MAP_1QTR, LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+    LAYOUT_MAP_0,    LAYOUT_MAP_HALF, LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+    LAYOUT_MAP_0,    LAYOUT_MAP_3QTR, LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+    LAYOUT_MAP_HALF, LAYOUT_MAP_0,    LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+    LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR, LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+    LAYOUT_MAP_HALF, LAYOUT_MAP_HALF, LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+    LAYOUT_MAP_HALF, LAYOUT_MAP_3QTR, LAYOUT_MAP_HALF, LAYOUT_MAP_1QTR,
+};
+
+BaseLayoutFactory<Layout2x4> layout2x4("Layout2x4", "2 x 4", OPTIONS_LAYOUT_2x4,
+                                       8, (uint8_t*)zmap);

@@ -19,8 +19,7 @@
  * GNU General Public License for more details.
  */
 
-#ifndef OPENTX_OPTIONS_H
-#define OPENTX_OPTIONS_H
+#pragma once
 
 static const char * const options[] = {
 #if defined(AUTOUPDATE)
@@ -62,6 +61,9 @@ static const char * const options[] = {
 #if defined(INTERNAL_GPS)
   "internalgps",
 #endif
+#if defined(SPACEMOUSE)
+  "spacemouse",
+#endif
 #if defined(INTERNAL_MODULE_PPM)
   "internalppm",
 #endif
@@ -83,17 +85,11 @@ static const char * const options[] = {
 #if !defined(OVERRIDE_CHANNEL_FUNCTION)
   "nooverridech",
 #endif
-#if defined(PPM_UNIT_US)
-  "ppmus",
-#endif
 #if defined(NO_RAS)
   "noras",
 #endif
 #if defined(SHUTDOWN_CONFIRMATION)
   "shutdownconfirm",
-#endif
-#if defined(HARDWARE_EXTERNAL_ACCESS_MOD)
-  "externalaccessmod",
 #endif
 #if defined(IMU_LSM6DS33)
   "lsm6ds33",
@@ -101,7 +97,11 @@ static const char * const options[] = {
 #if defined(BIND_KEY)
   "bindkey",
 #endif
+#if defined(CLI)
+    "cli",
+#endif
+#if defined(ENABLE_SERIAL_PASSTHROUGH)
+    "passthrough",
+#endif
   nullptr //sentinel
 };
-
-#endif //OPENTX_OPTIONS_H

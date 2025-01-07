@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -21,7 +22,7 @@
 #include "translations.h"
 #include "appdata.h"
 
-#include <QCoreApplication>
+#include <QCoreApplication> 
 #include <QDir>
 #include <QLibraryInfo>
 #include <QTranslator>
@@ -35,16 +36,17 @@ QStringList const Translations::getAvailableTranslations()
 
   if (!locales.size()) {
     locales << "cs_CZ"
+            << "da_DA"
             << "de_DE"
             << "en"
             << "es_ES"
             << "fi_FI"
             << "fr_FR"
-                          //<< "he_IL"
+            << "he_IL"
             << "it_IT"
-                          //<< "nl_NL"
+            << "nl_NL"
             << "pl_PL"
-                          //<< "pt_PT"
+            << "pt_PT"
             << "ru_RU"
             << "sv_SE"
             << "zh_CN"

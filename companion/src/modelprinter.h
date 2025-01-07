@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -31,19 +32,6 @@ QString addFont(const QString & input, const QString & color = "", const QString
 void debugHtml(const QString & html);
 QString formatTitle(const QString & name);
 
-class CurveImage
-{
-  public:
-    CurveImage();
-    void drawCurve(const CurveData & curve, QColor color);
-    const QImage & get() const { return image; }
-
-  protected:
-    int size;
-    QImage image;
-    QPainter painter;
-};
-
 class ModelPrinter: public QObject
 {
   Q_OBJECT
@@ -53,7 +41,6 @@ class ModelPrinter: public QObject
     virtual ~ModelPrinter();
 
     QString printBoolean(const bool val, const int typ);
-    QString printEEpromSize();
     QString printTrimIncrementMode();
     QString printThrottle();
     QString printFlightModeSwitch(const RawSwitch & swtch);
@@ -71,7 +58,6 @@ class ModelPrinter: public QObject
     QString printInputLine(const ExpoData & ed);
     QString printMixerLine(const MixData & md, bool showMultiplex, int highlightedSource = 0);
     QString printLogicalSwitchLine(int idx);
-    QString printCustomFunctionLine(int idx, bool gfunc = false);
     QString printChannelName(int idx);
     QString printCurveName(int idx);
     QString printCurve(int idx);
@@ -93,6 +79,7 @@ class ModelPrinter: public QObject
     QString printModuleType(int idx);
     QString printThrottleSource(int idx);
     QString printTrimsDisplayMode();
+    QString printHatsMode();
     QString printSettingsTrim();
     QString printSwitchWarnings();
     QString printPotWarnings();
@@ -116,6 +103,7 @@ class ModelPrinter: public QObject
     QString printTelemetryScreenType(unsigned int val);
     QString printTelemetryScreen(unsigned int idx, unsigned int line, unsigned int width);
     QString printChecklist();
+    const GeneralSettings * gs() { return &generalSettings; }
 
   private:
     Firmware * firmware;

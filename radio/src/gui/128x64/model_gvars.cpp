@@ -19,7 +19,7 @@
  * GNU General Public License for more details.
  */
 
-#include "opentx.h"
+#include "edgetx.h"
 
 void editGVarValue(coord_t x, coord_t y, event_t event, uint8_t gvar, uint8_t flightMode, LcdFlags flags)
 {
@@ -41,6 +41,7 @@ void editGVarValue(coord_t x, coord_t y, event_t event, uint8_t gvar, uint8_t fl
 
   if (flags & INVERS) {
     if (event == EVT_KEY_LONG(KEY_ENTER) && flightMode > 0) {
+      killEvents(event);
       *v = (*v > GVAR_MAX ? 0 : GVAR_MAX+1);
       storageDirty(EE_MODEL);
     }
@@ -62,6 +63,8 @@ enum GVarFields {
 };
 
 #define GVAR_2ND_COLUMN                (12*FW)
+
+static const char* const _str_units[] = { "-", "%" };
 
 void menuModelGVarOne(event_t event)
 {
@@ -87,7 +90,7 @@ void menuModelGVarOne(event_t event)
         break;
 
       case GVAR_FIELD_UNIT:
-        gvar->unit = editChoice(GVAR_2ND_COLUMN, y, STR_UNIT, "\001-%", gvar->unit, 0, 1, attr, event);
+        gvar->unit = editChoice(GVAR_2ND_COLUMN, y, STR_UNIT, _str_units, gvar->unit, 0, 1, attr, event);
         break;
 
       case GVAR_FIELD_PREC:

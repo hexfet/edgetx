@@ -105,10 +105,6 @@ enum GhstVtxBand
   GHST_VTX_BAND_COUNT
 };
 
-void processGhostTelemetryData(uint8_t data);
-void ghostSetDefault(int index, uint8_t id, uint8_t subId);
-uint8_t getGhostModuleAddr();
-
 #if SPORT_MAX_BAUDRATE < 400000
 // For radios which can't support telemetry at high rates, offer baud rate choices
 // (modified vs. unmodified radios)
@@ -165,27 +161,6 @@ enum GhostFrames
   GHST_MENU_CONTROL
 };
 
-constexpr uint8_t GHST_MENU_LINES = 6;
-constexpr uint8_t GHST_MENU_CHARS = 20;
-
-// GHST_DL_MENU_DESC (27 bytes)
-struct GhostMenuFrame
-{
-  uint8_t address;
-  uint8_t length ;
-  uint8_t packetId;
-  uint8_t menuStatus;    // GhostMenuStatus
-  uint8_t lineFlags;     // GhostLineFlags
-  uint8_t lineIndex;     // 0 = first line
-  unsigned char menuText[GHST_MENU_CHARS];
-  uint8_t crc;
-};
-
-struct GhostMenuData
-{
-  uint8_t menuStatus;    // Update Line, Clear Menu, etc.
-  uint8_t lineFlags;     // Carat states, Inverse, Bold for each of Menu Label, and Value
-  uint8_t splitLine;     // Store beginning of Value substring
-  char menuText[GHST_MENU_CHARS + 1];
-};
+void processGhostTelemetryFrame(uint8_t module, uint8_t* buffer, uint32_t length);
+void ghostSetDefault(int index, uint8_t id, uint8_t subId);
 

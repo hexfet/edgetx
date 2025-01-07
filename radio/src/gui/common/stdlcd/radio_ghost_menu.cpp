@@ -19,7 +19,11 @@
  * GNU General Public License for more details.
  */
 
-#include "opentx.h"
+#include "edgetx.h"
+
+#if defined(GHOST) && defined(HARDWARE_EXTERNAL_MODULE)
+
+#include "telemetry/ghost.h"
 
 void menuGhostModuleConfig(event_t event)
 {
@@ -60,7 +64,7 @@ void menuGhostModuleConfig(event_t event)
       break;
 
 
-    case EVT_KEY_FIRST(KEY_ENTER):
+    case EVT_KEY_BREAK(KEY_ENTER):
       reusableBuffer.ghostMenu.buttonAction = GHST_BTN_JOYPRESS;
       reusableBuffer.ghostMenu.menuAction = GHST_MENU_CTRL_NONE;
       moduleState[EXTERNAL_MODULE].counter = GHST_MENU_CONTROL;
@@ -122,3 +126,5 @@ void menuGhostModuleConfig(event_t event)
     }
   }
 }
+
+#endif

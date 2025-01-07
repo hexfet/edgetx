@@ -20,12 +20,18 @@
  */
 
 #include "dataconstants.h"
-#include "opentx_types.h"
+#include "edgetx_types.h"
 
 #include <functional>
 #include <string>
 #include <vector>
 #include <map>
+
+#if !defined(SIMU)
+// Forward declare FreeRTOS timer
+struct tmrTimerControl;
+typedef struct tmrTimerControl * TimerHandle_t;
+#endif
 
 class MultiRfProtocols
 {
@@ -42,8 +48,13 @@ class MultiRfProtocols
   uint8_t currentProto = 0;
   uint8_t totalProtos = 0;
 
-  MultiRfProtocols(unsigned int moduleIdx) : moduleIdx(moduleIdx) {}
+  MultiRfProtocols(unsigned int moduleIdx);
+  void fillBuiltinProtos();
 
+#if !defined(SIMU)
+  static void timerCb(TimerHandle_t xTimer);
+#endif
+  
  public:
 
   struct RfProto {
@@ -56,10 +67,12 @@ class MultiRfProtocols
     RfProto(int proto) : proto(proto) {}
 
     bool parse(const uint8_t* data, uint8_t len);
-    void fillSubProtoList(const char* str, int n, int len);
 
-    uint8_t getOption() const;
-    const char* getOptionStr() const;
+    // array of strings
+    void fillSubProtoList(const char *const *str, int n);
+
+    // fixed length strings concatenated
+    void fillSubProtoList(const char* str, int n, int len);
     
     bool supportsFailsafe() const { return flags & 0x01; }
     bool supportsDisableMapping() const { return flags & 0x02; }

@@ -19,35 +19,27 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _boot_h_
-#define _boot_h_
+#pragma once
 
+#include <stdint.h>
 #include "stamp.h"
+#include "keys.h"
 
 #if LCD_W < 212
-  #define BOOTLOADER_TITLE               " Bootloader - " VERSION
+  #if defined(VERSION_TAG)
+    #define BOOTLOADER_TITLE               " Bootloader - " VERSION_TAG
+  #else
+    #define BOOTLOADER_TITLE               " Bootloader " VERSION "-" VERSION_SUFFIX
+  #endif
 #else
-  #define BOOTLOADER_TITLE               " EdgeTX Bootloader - " VERSION
+  #if defined(VERSION_TAG)
+    #define BOOTLOADER_TITLE               " EdgeTX Bootloader - " VERSION_TAG
+  #else
+    #define BOOTLOADER_TITLE               " EdgeTX Bootloader - " VERSION "-" VERSION_SUFFIX
+  #endif
 #endif
 
 #define DISPLAY_CHAR_WIDTH             (LCD_COLS+4)
-
-#if LCD_W >= 480
-  #define STR_INVALID_FIRMWARE         "Not a valid firmware file"
-#elif LCD_W >= 212
-  #define STR_OR_PLUGIN_USB_CABLE      "Or plug in a USB cable for mass storage"
-  #define STR_HOLD_ENTER_TO_START      "\012Hold [ENT] to start writing"
-  #define STR_INVALID_FIRMWARE         "\011Not a valid firmware file!        "
-  #define STR_INVALID_EEPROM           "\011Not a valid EEPROM file!          "
-#else
-  #define STR_OR_PLUGIN_USB_CABLE      "Or plug in a USB cable"
-  #define STR_HOLD_ENTER_TO_START      "\006Hold [ENT] to start"
-  #define STR_INVALID_FIRMWARE         "\004Not a valid firmware!        "
-  #define STR_INVALID_EEPROM           "\004Not a valid EEPROM!          "
-#endif
-
-#define STR_USB_CONNECTED              CENTER "\011USB Connected"
-
 
 // Bootloader states
 enum BootloaderState {
@@ -61,6 +53,11 @@ enum BootloaderState {
   ST_FLASH_DONE,
   ST_RESTORE_MENU,
   ST_USB,
+#if defined(SPI_FLASH)
+  ST_CLEAR_FLASH_CHECK,
+  ST_CLEAR_FLASH,
+#endif
+  ST_RADIO_MENU,
   ST_REBOOT,
 };
 
@@ -78,9 +75,16 @@ void bootloaderInitScreen();
 
 // Depending on the state, up to two optional parameters are passed.
 // See boot.cpp/main for more details
-void bootloaderDrawScreen(BootloaderState st, int opt, const char* str = NULL);
+void bootloaderDrawScreen(BootloaderState st, int opt, const char* str = nullptr);
 
 // Once for each file in a filename list on screen
 void bootloaderDrawFilename(const char* str, uint8_t line, bool selected);
 
-#endif
+// get menu item count for main menu, by adding 1 to the baseCount, when a radio specific menu is used
+uint32_t bootloaderGetMenuItemCount(int baseCount);
+
+// when a radio specifc menu is used, all events are forwarded to that menu code
+// returns true on submenu exit
+bool bootloaderRadioMenu(uint32_t menuItem, event_t event);
+
+void blExit();

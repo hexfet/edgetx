@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -21,7 +22,6 @@
 #include "apppreferencesdialog.h"
 #include "ui_apppreferencesdialog.h"
 #include "mainwindow.h"
-#include "appdata.h"
 #include "helpers.h"
 #include "storage.h"
 #if defined(JOYSTICKS)
@@ -29,19 +29,28 @@
 #include "joystickdialog.h"
 #endif
 #include "moduledata.h"
-#include "compounditemmodels.h"
+#include "filtereditemmodels.h"
+#include "updates/updatefactories.h"
+#include "updates/updateoptionsdialog.h"
+#include <QPalette>
+#include <QColorDialog>
 
-#include <QAbstractItemModel>
+constexpr char FIM_TEMPLATESETUP[]    {"Template Setup"};
 
-AppPreferencesDialog::AppPreferencesDialog(QWidget * parent) :
+AppPreferencesDialog::AppPreferencesDialog(QWidget * parent, UpdateFactories * factories) :
   QDialog(parent),
   ui(new Ui::AppPreferencesDialog),
   updateLock(false),
-  mainWinHasDirtyChild(false)
+  mainWinHasDirtyChild(false),
+  factories(factories),
+  panelItemModels(nullptr)
 {
   ui->setupUi(this);
   setWindowIcon(CompanionIcon("apppreferences.png"));
   ui->tabWidget->setCurrentIndex(0);
+
+  panelItemModels = new FilteredItemModelFactory();
+  panelItemModels->registerItemModel(new FilteredItemModel(GeneralSettings::templateSetupItemModel()), FIM_TEMPLATESETUP);
 
   initSettings();
   connect(ui->boardCB, SIGNAL(currentIndexChanged(int)), this, SLOT(onBaseFirmwareChanged()));
@@ -62,6 +71,7 @@ AppPreferencesDialog::AppPreferencesDialog(QWidget * parent) :
 AppPreferencesDialog::~AppPreferencesDialog()
 {
   delete ui;
+  delete panelItemModels;
 }
 
 void AppPreferencesDialog::setMainWinHasDirtyChild(bool value)
@@ -73,16 +83,12 @@ void AppPreferencesDialog::accept()
 {
   Profile & profile = g.currentProfile();
 
-  g.autoCheckApp(ui->autoCheckCompanion->isChecked());
-  g.OpenTxBranch(AppData::DownloadBranchType(ui->OpenTxBranch->currentIndex()));
-  g.autoCheckFw(ui->autoCheckFirmware->isChecked());
   g.showSplash(ui->showSplash->isChecked());
+  g.sortProfiles(ui->sortProfiles->isChecked());
   g.promptProfile(ui->chkPromptProfile->isChecked());
-  g.simuSW(ui->simuSW->isChecked());
   g.removeModelSlots(ui->opt_removeBlankSlots->isChecked());
-  g.newModelAction(ui->opt_newMdl_useWizard->isChecked() ? AppData::MODEL_ACT_WIZARD : ui->opt_newMdl_useEditor->isChecked() ? AppData::MODEL_ACT_EDITOR : AppData::MODEL_ACT_NONE);
+  g.newModelAction((AppData::NewModelAction)ui->cboNewModelAction->currentIndex());
   g.historySize(ui->historySize->value());
-  g.backLight(ui->backLightColor->currentIndex());
   profile.volumeGain(round(ui->volumeGain->value() * 10.0));
   g.libDir(ui->libraryPath->text());
   g.gePath(ui->ge_lineedit->text());
@@ -92,24 +98,85 @@ void AppPreferencesDialog::accept()
   g.appDebugLog(ui->opt_appDebugLog->isChecked());
   g.fwTraceLog(ui->opt_fwTraceLog->isChecked());
   g.appLogsDir(ui->appLogsDir->text());
+  g.runAppInstaller(ui->chkPromptInstall->isChecked());
 
-  if (ui->joystickChkB ->isChecked() && ui->joystickCB->isEnabled()) {
+//  Simulator tab
+  g.simuSW(ui->simuSW->isChecked());
+  g.backLight(ui->backLightColor->currentIndex());
+  g.simuGenericKeysPos((AppData::SimuGenericKeysPos)ui->cboSimuGenericKeysPos->currentIndex());
+  g.simuScrollButtons(ui->chkSimuScrollButtons->isChecked());
+
+  g.disableJoystickWarning(ui->joystickWarningCB->isChecked());
+
+  if (ui->joystickChkB ->isChecked()) {
     g.jsSupport(ui->joystickChkB ->isChecked());
-    g.jsCtrl(ui->joystickCB ->currentIndex());
+    // Don't overwrite selected joystick if not connected. Avoid surprising the user.
+    if (ui->joystickCB->isEnabled()) {
+      profile.jsName(ui->joystickCB->currentText());
+      g.loadNamedJS();
+    }
   }
   else {
     g.jsSupport(false);
-    g.jsCtrl(0);
   }
+
+  //  Updates tab
+
+  if (ui->leDownloadDir->text().isEmpty()) {
+    QMessageBox::warning(this, CPN_STR_APP_NAME, tr("Update Settings: Download folder path missing!"));
+    return;
+  }
+
+  if (ui->leDecompressDir->text().isEmpty()) {
+    QMessageBox::warning(this, CPN_STR_APP_NAME, tr("Update Settings: Decompress folder path missing!"));
+    return;
+  }
+
+  if (ui->leUpdateDir->text().isEmpty()) {
+    QMessageBox::warning(this, CPN_STR_APP_NAME, tr("Update Settings: Update folder path missing!"));
+    return;
+  }
+
+  if (!ui->chkDecompressDirUseDwnld->isChecked() &&
+      ui->leDecompressDir->text().trimmed() == ui->leDownloadDir->text().trimmed()) {
+    QMessageBox::warning(this, CPN_STR_APP_NAME, tr("Update Settings: Decompress and download folders have the same path!"));
+    return;
+  }
+
+  g.updateCheckFreq(AppData::UpdateCheckFreq(ui->cboUpdateCheckFreq->currentIndex()));
+  g.downloadDir(ui->leDownloadDir->text());
+
+  g.decompressDirUseDwnld(ui->chkDecompressDirUseDwnld->isChecked());
+  g.decompressDir(ui->leDecompressDir->text());
+
+  g.updateDirUseSD(ui->chkUpdateDirUseSD->isChecked());
+  g.updateDir(ui->leUpdateDir->text());
+
+  g.updDelDownloads(ui->chkDelDownloads->isChecked());
+  g.updDelDecompress(ui->chkDelDecompress->isChecked());
+  g.updLogLevel(ui->cboLogLevel->currentIndex());
+
+  QMapIterator<QString, int> it(factories->sortedComponentsList());
+
+  while (it.hasNext()) {
+    it.next();
+    int i = it.value();
+
+    g.component[i].checkForUpdate(chkCheckForUpdate[i]->isChecked());
+    g.component[i].releaseChannel((ComponentData::ReleaseChannel)cboReleaseChannel[i]->currentIndex());
+  }
+
   profile.defaultInternalModule(ui->defaultInternalModuleCB->currentData().toInt());
-  profile.channelOrder(ui->channelorderCB->currentIndex());
-  profile.defaultMode(ui->stickmodeCB->currentIndex());
-  profile.renameFwFiles(ui->renameFirmware->isChecked());
+  profile.externalModuleSize(ui->externalModuleSizeCB->currentData().toInt());
+  profile.channelOrder(ui->channelorderCB->currentData().toInt());
+  profile.defaultMode(ui->stickmodeCB->currentData().toInt());
   profile.burnFirmware(ui->burnFirmware->isChecked());
   profile.sdPath(ui->sdPath->text());
   profile.pBackupDir(ui->profilebackupPath->text());
   profile.penableBackup(ui->pbackupEnable->isChecked());
   profile.splashFile(ui->SplashFileName->text());
+  profile.runSDSync(ui->chkPromptSDSync->isChecked());
+  profile.radioSimCaseColor(ui->lblRadioColorSample->palette().button().color());
 
   // The profile name may NEVER be empty
   if (ui->profileNameLE->text().isEmpty())
@@ -165,51 +232,28 @@ void AppPreferencesDialog::on_snapshotPathButton_clicked()
   }
 }
 
+void AppPreferencesDialog::on_btnRadioColor_clicked()
+{
+  Profile & profile = g.currentProfile();
+  QColorDialog *dlg = new QColorDialog(this);
+  QColor color = dlg->getColor(profile.radioSimCaseColor(), this);
+  ui->lblRadioColorSample->setPalette(QPalette(color));
+  ui->lblRadioColorSample->repaint();
+}
+
 void AppPreferencesDialog::initSettings()
 {
   const Profile & profile = g.currentProfile();
 
-  // Disable these for now, until online elements are implemented
-  ui->autoCheckFirmware->setDisabled(true);
-  ui->autoCheckCompanion->setDisabled(true);
-  ui->OpenTxBranch->setDisabled(true);
-
-  ui->snapshotClipboardCKB->setChecked(g.snapToClpbrd());
   ui->burnFirmware->setChecked(profile.burnFirmware());
-  ui->snapshotPath->setText(g.snapshotDir());
-  ui->snapshotPath->setReadOnly(true);
-  if (ui->snapshotClipboardCKB->isChecked()) {
-    ui->snapshotPath->setDisabled(true);
-    ui->snapshotPathButton->setDisabled(true);
-  }
 
-#if !defined(ALLOW_NIGHTLY_BUILDS)
-  // remove nightly version option entirely unless it's the current one (because user might have nightly version also installed)
-  if (g.OpenTxBranch() != AppData::BRANCH_NIGHTLY_UNSTABLE)
-    ui->OpenTxBranch->removeItem(2);
-  // if it's already selected, add a warning message
-  else
-    ui->updatesLayout->addWidget(new QLabel("<font color='red'>" % tr("Note: Nightly builds are not available in this version, Release/RC update channel will be used.") % "</font>", this));
-#endif
-  ui->OpenTxBranch->setCurrentIndex(g.OpenTxBranch());
-
-  ui->autoCheckCompanion->setChecked(g.autoCheckApp());
-  ui->autoCheckFirmware->setChecked(g.autoCheckFw());
   ui->showSplash->setChecked(g.showSplash());
+  ui->sortProfiles->setChecked(g.sortProfiles());
   ui->chkPromptProfile->setChecked(g.promptProfile());
   ui->historySize->setValue(g.historySize());
-  ui->backLightColor->setCurrentIndex(g.backLight());
-  ui->volumeGain->setValue(profile.volumeGain() / 10.0);
-
-  if (IS_HORUS_OR_TARANIS(getCurrentBoard())) {
-    ui->backLightColor->setEnabled(false);
-  }
-
-  ui->simuSW->setChecked(g.simuSW());
   ui->opt_removeBlankSlots->setChecked(g.removeModelSlots());
-  ui->opt_newMdl_useNone->setChecked(g.newModelAction() == AppData::MODEL_ACT_NONE);
-  ui->opt_newMdl_useWizard->setChecked(g.newModelAction() == AppData::MODEL_ACT_WIZARD);
-  ui->opt_newMdl_useEditor->setChecked(g.newModelAction() == AppData::MODEL_ACT_EDITOR);
+  ui->cboNewModelAction->addItems(AppData::newModelActionsList());
+  ui->cboNewModelAction->setCurrentIndex(g.newModelAction());
   ui->libraryPath->setText(g.libDir());
   ui->ge_lineedit->setText(g.gePath());
 
@@ -232,13 +276,32 @@ void AppPreferencesDialog::initSettings()
   ui->opt_fwTraceLog->setChecked(g.fwTraceLog());
   ui->appLogsDir->setText(g.appLogsDir());
   toggleAppLogSettings();
+  ui->chkPromptInstall->setChecked(g.runAppInstaller());
+
+  //  Simulator tab
+  ui->snapshotPath->setText(g.snapshotDir());
+  ui->snapshotPath->setReadOnly(true);
+  ui->snapshotClipboardCKB->setChecked(g.snapToClpbrd());
+  if (ui->snapshotClipboardCKB->isChecked()) {
+    ui->snapshotPath->setDisabled(true);
+    ui->snapshotPathButton->setDisabled(true);
+  }
+  ui->simuSW->setChecked(g.simuSW());
+  ui->backLightColor->setCurrentIndex(g.backLight());
+  if (!Boards::getCapability(getCurrentBoard(), Board::HasBacklightColor))
+    ui->backLightColor->setEnabled(false);
+  ui->volumeGain->setValue(profile.volumeGain() / 10.0);
+  ui->cboSimuGenericKeysPos->addItems(AppData::simuGenericKeysPosList());
+  ui->cboSimuGenericKeysPos->setCurrentIndex(g.simuGenericKeysPos());
+  ui->chkSimuScrollButtons->setChecked(g.simuScrollButtons());
+  ui->joystickWarningCB->setChecked(g.disableJoystickWarning());
 
 #if defined(JOYSTICKS)
   ui->joystickChkB->setChecked(g.jsSupport());
   if (ui->joystickChkB->isChecked()) {
     QStringList joystickNames;
     joystickNames << tr("No joysticks found");
-    joystick = new Joystick(0,false,0,0);
+    joystick = new Joystick(0,0,false,0);
     ui->joystickcalButton->setDisabled(true);
     ui->joystickCB->setDisabled(true);
 
@@ -252,7 +315,8 @@ void AppPreferencesDialog::initSettings()
     }
     ui->joystickCB->clear();
     ui->joystickCB->insertItems(0, joystickNames);
-    ui->joystickCB->setCurrentIndex(g.jsCtrl());
+    int stick = joystick->findCurrent(g.currentProfile().jsName());
+    ui->joystickCB->setCurrentIndex(stick);
   }
   else {
     ui->joystickCB->clear();
@@ -263,9 +327,14 @@ void AppPreferencesDialog::initSettings()
   //  Profile Tab Inits
   ui->defaultInternalModuleCB->setModel(ModuleData::internalModuleItemModel());
   ui->defaultInternalModuleCB->setCurrentIndex(ui->defaultInternalModuleCB->findData(profile.defaultInternalModule()));
-  ui->channelorderCB->setCurrentIndex(profile.channelOrder());
-  ui->stickmodeCB->setCurrentIndex(profile.defaultMode());
-  ui->renameFirmware->setChecked(profile.renameFwFiles());
+  ui->externalModuleSizeCB->setModel(Boards::externalModuleSizeItemModel());
+  ui->externalModuleSizeCB->setCurrentIndex(ui->externalModuleSizeCB->findData(profile.externalModuleSize()));
+  panelItemModels->getItemModel(FIM_TEMPLATESETUP)->setFilterFlags(Boards::isAir() ? GeneralSettings::RadioTypeContextAir :
+                                                                                     GeneralSettings::RadioTypeContextSurface);
+  ui->channelorderCB->setModel(panelItemModels->getItemModel(FIM_TEMPLATESETUP));
+  ui->channelorderCB->setCurrentIndex(ui->channelorderCB->findData(profile.channelOrder()));
+  ui->stickmodeCB->setModel(GeneralSettings::stickModeItemModel());
+  ui->stickmodeCB->setCurrentIndex(ui->stickmodeCB->findData(profile.defaultMode()));
   ui->sdPath->setText(profile.sdPath());
   if (!profile.pBackupDir().isEmpty()) {
     if (QDir(profile.pBackupDir()).exists()) {
@@ -278,6 +347,11 @@ void AppPreferencesDialog::initSettings()
   }
   else {
       ui->pbackupEnable->setDisabled(true);
+  }
+
+  if (Boards::isSurface()) {
+    ui->stickmodeLabel->hide();
+    ui->stickmodeCB->hide();
   }
 
   ui->profileNameLE->setText(profile.name());
@@ -294,6 +368,8 @@ void AppPreferencesDialog::initSettings()
       hwSettings = tr("AVAILABLE: Radio settings stored %1").arg(str);
   }
   ui->lblGeneralSettings->setText(hwSettings);
+  ui->chkPromptSDSync->setChecked(profile.runSDSync());
+  ui->lblRadioColorSample->setPalette(QPalette(profile.radioSimCaseColor()));
 
   QString currType = QStringList(profile.fwType().split('-').mid(0, 2)).join('-');
   foreach(Firmware * firmware, Firmware::getRegisteredFirmwares()) {
@@ -303,7 +379,184 @@ void AppPreferencesDialog::initSettings()
     }
   }
 
-  onBaseFirmwareChanged();
+  populateFirmwareOptions(getBaseFirmware());
+
+  //  Updates tab
+
+  ui->cboUpdateCheckFreq->addItems(AppData::updateCheckFreqsList());
+
+  connect(ui->btnResetUpdatesToDefaults, &QPushButton::clicked, [=]() {
+    if (QMessageBox::question(this, CPN_STR_APP_NAME, tr("Reset all update settings to defaults. Are you sure?"),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
+      g.resetUpdatesSettings();
+      QMessageBox::warning(this, CPN_STR_APP_NAME,
+                           tr("Update settings have been reset. Please close and restart Companion to avoid unexpected behaviour!"));
+      loadUpdatesTab();
+    }
+  });
+
+  connect(ui->chkDecompressDirUseDwnld, &QCheckBox::toggled, [=](const bool checked) {
+    if (!checked) {
+      ui->leDecompressDir->setText(g.decompressDir());
+      ui->leDecompressDir->setEnabled(true);
+      ui->btnDecompressSelect->setEnabled(true);
+      ui->chkDelDownloads->setEnabled(true);
+    }
+    else {
+      ui->leDecompressDir->setText(g.downloadDir());
+      ui->leDecompressDir->setEnabled(false);
+      ui->btnDecompressSelect->setEnabled(false);
+      if (ui->chkDelDecompress->isChecked()) {
+        ui->chkDelDownloads->setEnabled(true);
+      }
+      else {
+        ui->chkDelDownloads->setEnabled(false);
+        ui->chkDelDownloads->setChecked(false);
+      }
+    }
+  });
+
+  connect(ui->chkUpdateDirUseSD, &QCheckBox::toggled, [=](const bool checked) {
+    if (!checked) {
+      ui->leUpdateDir->setText(g.updateDir());
+      ui->leUpdateDir->setEnabled(true);
+      ui->btnUpdateSelect->setEnabled(true);
+    }
+    else {
+      ui->leUpdateDir->setText(g.currentProfile().sdPath());
+      ui->leUpdateDir->setEnabled(false);
+      ui->btnUpdateSelect->setEnabled(false);
+    }
+  });
+
+  connect(ui->btnDownloadSelect, &QPushButton::clicked, [=]() {
+    QString dirPath = QFileDialog::getExistingDirectory(this,tr("Select your download folder"), g.downloadDir());
+    if (!dirPath.isEmpty()) {
+      ui->leDownloadDir->setText(dirPath);
+    }
+  });
+
+  connect(ui->btnDecompressSelect, &QPushButton::clicked, [=]() {
+    QString dirPath = QFileDialog::getExistingDirectory(this,tr("Select your decompress folder"), g.decompressDir());
+    if (!dirPath.isEmpty()) {
+      ui->leDecompressDir->setText(dirPath);
+    }
+  });
+
+  connect(ui->btnUpdateSelect, &QPushButton::clicked, [=]() {
+    QString dirPath = QFileDialog::getExistingDirectory(this,tr("Select your update destination folder"), g.updateDir());
+    if (!dirPath.isEmpty()) {
+      ui->leUpdateDir->setText(dirPath);
+    }
+  });
+
+  connect(ui->chkDelDecompress, &QCheckBox::stateChanged, [=](const int checked) {
+    if (!checked) {
+      if (ui->chkDecompressDirUseDwnld->isChecked()) {
+        ui->chkDelDownloads->setEnabled(false);
+        ui->chkDelDownloads->setChecked(false);
+      }
+    }
+    else {
+      ui->chkDelDownloads->setEnabled(true);
+    }
+  });
+
+  int row = 0;
+  int col = 0;
+
+  QGridLayout *grid = new QGridLayout();
+
+  col++;  //  leave col 0 blank
+
+  QLabel *h1 = new QLabel(tr("Check"));
+  grid->addWidget(h1, row, col++);
+
+  QLabel *h2 = new QLabel(tr("Release channel"));
+  grid->addWidget(h2, row, col++);
+
+  col++;  // options button
+
+  QSpacerItem * spacer = new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum );
+  grid->addItem(spacer, row, col++);
+
+  QMapIterator<QString, int> it(factories->sortedComponentsList());
+
+  while (it.hasNext()) {
+    it.next();
+    int i = it.value();
+
+    row++;
+    col = 0;
+
+    lblName[i] = new QLabel();
+    grid->addWidget(lblName[i], row, col++);
+
+    chkCheckForUpdate[i] = new QCheckBox();
+    grid->addWidget(chkCheckForUpdate[i], row, col++);
+    grid->setAlignment(chkCheckForUpdate[i], Qt::AlignHCenter);
+
+    cboReleaseChannel[i] = new QComboBox();
+    cboReleaseChannel[i]->addItems(ComponentData::releaseChannelsList());
+    grid->addWidget(cboReleaseChannel[i], row, col++);
+
+    btnComponentOptions[i] = new QPushButton(tr("Options"));
+    connect(btnComponentOptions[i], &QPushButton::clicked, [=]() {
+      UpdateOptionsDialog *dlg = new UpdateOptionsDialog(this, factories->instance(i), i, false);
+      dlg->exec();
+      dlg->deleteLater();
+    });
+    grid->addWidget(btnComponentOptions[i], row, col++);
+  }
+
+  ui->grpComponents->setLayout(grid);
+
+  ui->cboLogLevel->addItems(AppData::updateLogLevelsList());
+
+  loadUpdatesTab();
+}
+
+void AppPreferencesDialog::loadUpdatesTab()
+{
+  ui->cboUpdateCheckFreq->setCurrentIndex(g.updateCheckFreq());
+  ui->chkDelDownloads->setChecked(g.updDelDownloads());
+  ui->chkDelDecompress->setChecked(g.updDelDecompress());
+  ui->leDownloadDir->setText(g.downloadDir());
+  //  trigger toggled signal by changing design value and then setting to saved value
+  ui->chkDecompressDirUseDwnld->setChecked(!ui->chkDecompressDirUseDwnld->isChecked());
+  ui->chkDecompressDirUseDwnld->setChecked(g.decompressDirUseDwnld());
+
+  if (g.currentProfile().sdPath().trimmed().isEmpty())
+    ui->chkUpdateDirUseSD->setEnabled(false);
+  else
+    ui->chkUpdateDirUseSD->setEnabled(true);
+
+  if (g.updateDirUseSD() && g.currentProfile().sdPath().trimmed().isEmpty()) {
+    g.updateDirUseSD(false);
+    g.updateDirReset();
+  }
+
+  if (g.updateDirUseSD()) {
+    //  trigger toggled signal by changing design value and then setting to saved value
+    ui->chkUpdateDirUseSD->setChecked(!ui->chkUpdateDirUseSD->isChecked());
+    ui->chkUpdateDirUseSD->setChecked(g.updateDirUseSD());
+  }
+  else
+    ui->chkUpdateDirUseSD->setChecked(false);
+
+  ui->chkDelDownloads->setChecked(g.updDelDownloads());
+  ui->cboLogLevel->setCurrentIndex(g.updLogLevel());
+
+  QMapIterator<QString, int> it(factories->sortedComponentsList());
+
+  while (it.hasNext()) {
+    it.next();
+    int i = it.value();
+
+    lblName[i]->setText(it.key());
+    chkCheckForUpdate[i]->setChecked(g.component[i].checkForUpdate());
+    cboReleaseChannel[i]->setCurrentIndex(g.component[i].releaseChannel());
+  }
 }
 
 void AppPreferencesDialog::on_libraryPathButton_clicked()
@@ -378,7 +631,7 @@ void AppPreferencesDialog::on_joystickChkB_clicked() {
   if (ui->joystickChkB->isChecked()) {
     QStringList joystickNames;
     joystickNames << tr("No joysticks found");
-    joystick = new Joystick(0,false,0,0);
+    joystick = new Joystick(0,0,false,0);
     ui->joystickcalButton->setDisabled(true);
     ui->joystickCB->setDisabled(true);
 
@@ -401,8 +654,9 @@ void AppPreferencesDialog::on_joystickChkB_clicked() {
 }
 
 void AppPreferencesDialog::on_joystickcalButton_clicked() {
-   joystickDialog * jd=new joystickDialog(this, ui->joystickCB->currentIndex());
-   jd->exec();
+  g.currentProfile().jsName(ui->joystickCB->currentText());
+  joystickDialog * jd = new joystickDialog(this);
+  jd->exec();
 }
 #endif
 
@@ -429,7 +683,8 @@ bool AppPreferencesDialog::displayImage(const QString & fileName)
     return false;
 
   ui->imageLabel->setPixmap(makePixMap(image));
-  ui->imageLabel->setFixedSize(getCurrentFirmware()->getCapability(LcdWidth), getCurrentFirmware()->getCapability(LcdHeight));
+  ui->imageLabel->setFixedSize(Boards::getCapability(getCurrentBoard(), Board::LcdWidth),
+                               Boards::getCapability(getCurrentBoard(), Board::LcdHeight));
   return true;
 }
 
@@ -466,6 +721,23 @@ void AppPreferencesDialog::onBaseFirmwareChanged()
   profile.defaultInternalModule(Boards::getDefaultInternalModules(newfw->getBoard()));
   ui->defaultInternalModuleCB->setModel(ModuleData::internalModuleItemModel(newfw->getBoard()));
   ui->defaultInternalModuleCB->setCurrentIndex(ui->defaultInternalModuleCB->findData(profile.defaultInternalModule()));
+
+  profile.externalModuleSize(Boards::getDefaultExternalModuleSize(newfw->getBoard()));
+  ui->externalModuleSizeCB->setModel(Boards::externalModuleSizeItemModel());
+  ui->externalModuleSizeCB->setCurrentIndex(ui->externalModuleSizeCB->findData(profile.externalModuleSize()));
+
+  if (Boards::isSurface()) {
+    profile.defaultMode(1);
+    ui->stickmodeLabel->hide();
+    ui->stickmodeCB->hide();
+    profile.channelOrder(0);
+  }
+
+  ui->stickmodeCB->setCurrentIndex(ui->stickmodeCB->findData(profile.defaultMode()));
+  panelItemModels->getItemModel(FIM_TEMPLATESETUP)->setFilterFlags(Boards::isAir() ? GeneralSettings::RadioTypeContextAir :
+                                                                                     GeneralSettings::RadioTypeContextSurface);
+  ui->channelorderCB->setCurrentIndex(ui->channelorderCB->findData(profile.channelOrder()));
+
 }
 
 Firmware *AppPreferencesDialog::getBaseFirmware() const
@@ -566,9 +838,7 @@ void AppPreferencesDialog::populateFirmwareOptions(const Firmware * firmware)
     }
   }
 
-  // TODO: Remove once splash replacement supported on Horus
-  // NOTE: 480x272 image causes issues on screens <800px high, needs a solution like scrolling once reinstated
-  if (IS_FAMILY_HORUS_OR_T16(baseFw->getBoard())) {
+  if (Boards::getCapability(baseFw->getBoard(), Board::HasColorLcd)) {
     ui->widget_splashImage->hide();
     ui->SplashFileName->setText("");
   }

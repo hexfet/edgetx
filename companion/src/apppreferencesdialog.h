@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -18,25 +19,30 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _APPPREFERENCESDIALOG_H_
-#define _APPPREFERENCESDIALOG_H_
+#pragma once
+
+#include "eeprominterface.h"
+#include "appdata.h"
 
 #include <QDialog>
 #include <QCheckBox>
-#include "eeprominterface.h"
+#include <QComboBox>
+
+class FilteredItemModelFactory;
 
 namespace Ui {
   class AppPreferencesDialog;
 }
 
 class Joystick;
+class UpdateFactories;
 
 class AppPreferencesDialog : public QDialog
 {
     Q_OBJECT
 
   public:
-    explicit AppPreferencesDialog(QWidget * parent = 0);
+    explicit AppPreferencesDialog(QWidget * parent, UpdateFactories * factories);
     ~AppPreferencesDialog();
 
     Joystick * joystick;
@@ -73,6 +79,8 @@ class AppPreferencesDialog : public QDialog
     void on_joystickcalButton_clicked();
 #endif
 
+    void on_btnRadioColor_clicked();
+
   private:
     void initSettings();
     void populateFirmwareOptions(const Firmware *);
@@ -84,6 +92,15 @@ class AppPreferencesDialog : public QDialog
     QMap<QString, QCheckBox *> optionsCheckBoxes;
     bool updateLock;
     bool mainWinHasDirtyChild;
-};
 
-#endif // _APPPREFERENCESDIALOG_H_
+    UpdateFactories *factories;
+    QLabel *lblName[MAX_COMPONENTS];
+    QCheckBox *chkCheckForUpdate[MAX_COMPONENTS];
+    QComboBox *cboReleaseChannel[MAX_COMPONENTS];
+    QPushButton *btnComponentOptions[MAX_COMPONENTS];
+
+    FilteredItemModelFactory *panelItemModels;
+
+    void loadUpdatesTab();
+
+};

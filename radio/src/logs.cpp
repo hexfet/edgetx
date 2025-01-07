@@ -19,28 +19,94 @@
  * GNU General Public License for more details.
  */
 
-#include "opentx.h"
+#include "edgetx.h"
 #include "ff.h"
+
+#include "analogs.h"
+#include "switches.h"
+#include "hal/adc_driver.h"
+#include "hal/switch_driver.h"
+#include "hal/usb_driver.h"
 
 #if defined(LIBOPENUI)
   #include "libopenui.h"
 #endif
 
 FIL g_oLogFile __DMA;
-const char * g_logError = nullptr;
-uint8_t logDelay;
+uint8_t logDelay100ms;
+static tmr10ms_t lastLogTime = 0;
+
+#if !defined(SIMU)
+#include <FreeRTOS/include/FreeRTOS.h>
+#include <FreeRTOS/include/timers.h>
+
+#include "tasks/mixer_task.h"
+
+static TimerHandle_t loggingTimer = nullptr;
+static StaticTimer_t loggingTimerBuffer;
+
+static void loggingTimerCb(TimerHandle_t xTimer)
+{
+  (void)xTimer;
+  if (mixerTaskRunning()) {
+    DEBUG_TIMER_START(debugTimerLoggingWakeup);
+    logsWrite();
+    DEBUG_TIMER_STOP(debugTimerLoggingWakeup);
+  }
+}
+
+void loggingTimerStart()
+{
+  if (!loggingTimer) {
+    loggingTimer =
+        xTimerCreateStatic("Logging", logDelay100ms*100 / RTOS_MS_PER_TICK, pdTRUE, (void*)0,
+                           loggingTimerCb, &loggingTimerBuffer);
+  }
+
+  if (loggingTimer) {
+    if( xTimerStart( loggingTimer, 0 ) != pdPASS ) {
+      /* The timer could not be set into the Active state. */
+    }
+  }
+}
+
+void loggingTimerStop()
+{
+  if (loggingTimer) {
+    if( xTimerStop( loggingTimer, 120 / RTOS_MS_PER_TICK ) != pdPASS ) {
+      /* The timer could not be stopped. */
+    }
+    loggingTimer = nullptr;
+  }
+}
+
+void initLoggingTimer() {                                       // called cyclically by main.cpp:perMain()
+  static uint8_t logDelay100msOld = 0;
+
+  if(loggingTimer == nullptr) {                                 // log Timer not running
+    if(isFunctionActive(FUNCTION_LOGS) && logDelay100ms > 0) {  // if SF Logging is active and log rate is valid
+      loggingTimerStart();                                      // start log timer
+    }  
+  } else {                                                      // log timer is already running
+    if(logDelay100msOld != logDelay100ms) {                     // if log rate was changed
+      logDelay100msOld = logDelay100ms;                         // memorize new log rate
+
+      if(logDelay100ms > 0) {
+        if(xTimerChangePeriod( loggingTimer, logDelay100ms*100, 0 ) != pdPASS ) {  // and restart timer with new log rate
+          /* The timer period could not be changed */
+        }
+      }
+    }
+  }
+}
+#endif
 
 void writeHeader();
 
-#if defined(PCBFRSKY) || defined(PCBNV14)
-  int getSwitchState(uint8_t swtch) {
-    int value = getValue(MIXSRC_FIRST_SWITCH + swtch);
-    return (value == 0) ? 0 : (value < 0) ? -1 : +1;
-  }
-#else
-  #define GET_2POS_STATE(sw) (switchState(SW_ ## sw) ? -1 : 1)
-  #define GET_3POS_STATE(sw) (switchState(SW_ ## sw ## 0) ? -1 : (switchState(SW_ ## sw ## 2) ? 1 : 0))
-#endif
+int getSwitchState(uint8_t swtch) {
+  int value = getValue(MIXSRC_FIRST_SWITCH + swtch);
+  return (value == 0) ? 0 : (value < 0) ? -1 : +1;
+}
 
 void logsInit()
 {
@@ -49,61 +115,37 @@ void logsInit()
 
 const char * logsOpen()
 {
+  if (!sdMounted())
+    return STR_NO_SDCARD;
+
   // Determine and set log file filename
   FRESULT result;
 
   // /LOGS/modelnamexxxxxx_YYYY-MM-DD-HHMMSS.log
   char filename[sizeof(LOGS_PATH) + LEN_MODEL_NAME + 18 + 4 + 1];
 
-  if (!sdMounted())
-    return STR_NO_SDCARD;
-
-  if (sdGetFreeSectors() == 0)
-    return STR_SDCARD_FULL;
-
   // check and create folder here
-  strcpy(filename, STR_LOGS_PATH);
+  char* tmp = strAppend(filename, STR_LOGS_PATH);
   const char * error = sdCheckAndCreateDirectory(filename);
   if (error) {
     return error;
   }
 
-  filename[sizeof(LOGS_PATH) - 1] = '/';
-  memcpy(&filename[sizeof(LOGS_PATH)], g_model.header.name, sizeof(g_model.header.name));
-  filename[sizeof(LOGS_PATH) + LEN_MODEL_NAME] = '\0';
-
-  uint8_t i = sizeof(LOGS_PATH) + LEN_MODEL_NAME - 1;
-  uint8_t len = 0;
-  while (i > sizeof(LOGS_PATH) - 1) {
-    if (!len && filename[i])
-      len = i+1;
-    if (len) {
-      if (!filename[i])
-        filename[i] = '_';
-    }
-    i--;
-  }
-
-  if (len == 0) {
-#if defined(EEPROM)
-    uint8_t num = g_eeGeneral.currModel + 1;
-#else
+  tmp = strAppend(tmp, "/");
+  if (g_model.header.name[0]) {
+    tmp = strAppend(tmp, sanitizeForFilename(g_model.header.name, LEN_MODEL_NAME));
+  } else {
     // TODO
     uint8_t num = 1;
-#endif
-    strcpy(&filename[sizeof(LOGS_PATH)], STR_MODEL);
-    filename[sizeof(LOGS_PATH) + PSIZE(TR_MODEL)] = (char)((num / 10) + '0');
-    filename[sizeof(LOGS_PATH) + PSIZE(TR_MODEL) + 1] = (char)((num % 10) + '0');
-    len = sizeof(LOGS_PATH) + PSIZE(TR_MODEL) + 2;
+    tmp = strAppend(tmp, STR_MODEL);
+    tmp = strAppendUnsigned(tmp, num, 2);
   }
-
-  char * tmp = &filename[len];
 
 #if defined(RTCLOCK)
   tmp = strAppendDate(tmp, true);
 #endif
 
-  strcpy(tmp, STR_LOGS_EXT);
+  strAppend(tmp, STR_LOGS_EXT);
 
   result = f_open(&g_oLogFile, filename, FA_OPEN_ALWAYS | FA_WRITE | FA_OPEN_APPEND);
   if (result != FR_OK) {
@@ -117,19 +159,17 @@ const char * logsOpen()
   return nullptr;
 }
 
-tmr10ms_t lastLogTime = 0;
-
 void logsClose()
 {
-  if (sdMounted()) {
+  if (g_oLogFile.obj.fs && sdMounted()) {
     if (f_close(&g_oLogFile) != FR_OK) {
       // close failed, forget file
-      g_oLogFile.obj.fs = 0;
+      g_oLogFile.obj.fs = nullptr;
     }
     lastLogTime = 0;
   }
-}
 
+}
 
 void writeHeader()
 {
@@ -138,7 +178,6 @@ void writeHeader()
 #else
   f_puts("Time,", &g_oLogFile);
 #endif
-
 
   char label[TELEM_LABEL_LEN+7];
   for (int i=0; i<MAX_TELEMETRY_SENSORS; i++) {
@@ -151,7 +190,7 @@ void writeHeader()
         if (unit == UNIT_CELLS ) unit = UNIT_VOLTS;
         if (UNIT_RAW < unit && unit < UNIT_FIRST_VIRTUAL) {
           strcat(label, "(");
-          strncat(label, STR_VTELEMUNIT+1+3*unit, 3);
+          strncat(label, STR_VTELEMUNIT[unit], 3);
           strcat(label, ")");
         }
         strcat(label, ",");
@@ -160,31 +199,36 @@ void writeHeader()
     }
   }
 
-#if defined(PCBFRSKY) || defined(PCBNV14)
-  for (uint8_t i=1; i<NUM_STICKS+NUM_POTS+NUM_SLIDERS+1; i++) {
-    const char * p = STR_VSRCRAW + i * STR_VSRCRAW[0] + 2;
-    for (uint8_t j=0; j<STR_VSRCRAW[0]-1; ++j) {
-      if (!*p) break;
-      f_putc(*p, &g_oLogFile);
-      ++p;
-    }
-    f_putc(',', &g_oLogFile);
+  auto n_inputs = adcGetMaxInputs(ADC_INPUT_MAIN);
+  for (uint8_t i = 0; i < n_inputs; i++) {
+    const char* p = analogGetCanonicalName(ADC_INPUT_MAIN, i);
+    f_puts(p, &g_oLogFile);
+    f_puts(",", &g_oLogFile);
   }
 
-  for (uint8_t i=0; i<NUM_SWITCHES; i++) {
+  n_inputs = adcGetMaxInputs(ADC_INPUT_FLEX);
+  for (uint8_t i = 0; i < n_inputs; i++) {
+    if (!IS_POT_AVAILABLE(i)) continue;
+    const char* p = analogGetCanonicalName(ADC_INPUT_FLEX, i);
+    f_puts(p, &g_oLogFile);
+    f_puts(",", &g_oLogFile);
+  }
+
+  for (uint8_t i = 0; i < switchGetMaxSwitches(); i++) {
     if (SWITCH_EXISTS(i)) {
       char s[LEN_SWITCH_NAME + 2];
       char * temp;
-      temp = getSwitchName(s, SWSRC_FIRST_SWITCH + i * 3);
+      temp = getSwitchName(s, i);
       *temp++ = ',';
       *temp = '\0';
       f_puts(s, &g_oLogFile);
     }
   }
   f_puts("LSW,", &g_oLogFile);
-#else
-  f_puts("Rud,Ele,Thr,Ail,P1,P2,P3,THR,RUD,ELE,3POS,AIL,GEA,TRN,", &g_oLogFile);
-#endif
+  
+  for (uint8_t channel = 0; channel < MAX_OUTPUT_CHANNELS; channel++) {
+    f_printf(&g_oLogFile, "CH%d(us),", channel+1);
+  }
 
   f_puts("TxBat(V)\n", &g_oLogFile);
 }
@@ -206,20 +250,37 @@ void logsWrite()
     return;
   }
 
-  if (isFunctionActive(FUNCTION_LOGS) && logDelay > 0) {
-    tmr10ms_t tmr10ms = get_tmr10ms();
-    if (lastLogTime == 0 || (tmr10ms_t)(tmr10ms - lastLogTime) >= (tmr10ms_t)logDelay*10) {
+  if (isFunctionActive(FUNCTION_LOGS) && logDelay100ms > 0 && !usbPlugged()) {
+    #if defined(SIMU) || !defined(RTCLOCK)
+    tmr10ms_t tmr10ms = get_tmr10ms();                                        // tmr10ms works in 10ms increments
+    if (lastLogTime == 0 || (tmr10ms_t)(tmr10ms - lastLogTime) >= (tmr10ms_t)(logDelay100ms*10)-1) {
       lastLogTime = tmr10ms;
+    #else
+    {
+    #endif
 
+      bool sdCardFull = sdIsFull();
+
+      // check if file needs to be opened
       if (!g_oLogFile.obj.fs) {
-        const char * result = logsOpen();
+        const char *result = sdCardFull ? STR_SDCARD_FULL_EXT : logsOpen();
+
+        // SD card is full or file open failed
         if (result) {
           if (result != error_displayed) {
             error_displayed = result;
-            POPUP_WARNING(result);
+            POPUP_WARNING_ON_UI_TASK(result, nullptr, false);
           }
           return;
         }
+      }
+
+      // check at every write cycle
+      if (sdCardFull) {
+        logsClose();  // timer is still running and code above will try to
+                      // open the file again but will fail with error
+                      // which will trigger the warning popup
+        return;
       }
 
 #if defined(RTCLOCK)
@@ -239,8 +300,12 @@ void logsWrite()
       for (int i=0; i<MAX_TELEMETRY_SENSORS; i++) {
         if (isTelemetryFieldAvailable(i)) {
           TelemetrySensor & sensor = g_model.telemetrySensors[i];
-          TelemetryItem & telemetryItem = telemetryItems[i];
+          TelemetryItem telemetryItem;
+          
           if (sensor.logs) {
+            if(TELEMETRY_STREAMING() && !telemetryItems[i].isOld())
+              telemetryItem = telemetryItems[i];
+
             if (sensor.unit == UNIT_GPS) {
               if (telemetryItem.gps.longitude && telemetryItem.gps.latitude) {
                 div_t qr = div((int)telemetryItem.gps.latitude, 1000000);
@@ -256,6 +321,9 @@ void logsWrite()
             }
             else if (sensor.unit == UNIT_DATETIME) {
               f_printf(&g_oLogFile, "%4d-%02d-%02d %02d:%02d:%02d,", telemetryItem.datetime.year, telemetryItem.datetime.month, telemetryItem.datetime.day, telemetryItem.datetime.hour, telemetryItem.datetime.min, telemetryItem.datetime.sec);
+            }
+            else if (sensor.unit == UNIT_TEXT) {
+              f_printf(&g_oLogFile, "\"%s\",", telemetryItem.text);
             }
             else if (sensor.prec == 2) {
               div_t qr = div((int)telemetryItem.value, 100);
@@ -274,42 +342,49 @@ void logsWrite()
         }
       }
 
-      for (uint8_t i=0; i<NUM_STICKS+NUM_POTS+NUM_SLIDERS; i++) {
-        f_printf(&g_oLogFile, "%d,", calibratedAnalogs[i]);
+      auto n_inputs = adcGetMaxInputs(ADC_INPUT_MAIN);
+      auto offset = adcGetInputOffset(ADC_INPUT_MAIN);
+
+      for (uint8_t i = 0; i < n_inputs; i++) {
+        f_printf(&g_oLogFile, "%d,", calibratedAnalogs[inputMappingConvertMode(offset + i)]);
       }
 
-#if defined(PCBFRSKY) || defined(PCBFLYSKY)
-      for (uint8_t i=0; i<NUM_SWITCHES; i++) {
+      n_inputs = adcGetMaxInputs(ADC_INPUT_FLEX);
+      offset = adcGetInputOffset(ADC_INPUT_FLEX);
+
+      for (uint8_t i = 0; i < n_inputs; i++) {
+        if (IS_POT_AVAILABLE(i))
+          f_printf(&g_oLogFile, "%d,", calibratedAnalogs[offset + i]);
+      }
+
+      for (uint8_t i = 0; i < switchGetMaxSwitches(); i++) {
         if (SWITCH_EXISTS(i)) {
           f_printf(&g_oLogFile, "%d,", getSwitchState(i));
         }
       }
-      f_printf(&g_oLogFile, "0x%08X%08X,", getLogicalSwitchesStates(32), getLogicalSwitchesStates(0));
-#else
-      f_printf(&g_oLogFile, "%d,%d,%d,%d,%d,%d,%d,",
-          GET_2POS_STATE(THR),
-          GET_2POS_STATE(RUD),
-          GET_2POS_STATE(ELE),
-          GET_3POS_STATE(ID),
-          GET_2POS_STATE(AIL),
-          GET_2POS_STATE(GEA),
-          GET_2POS_STATE(TRN));
-#endif
+      f_printf(&g_oLogFile, "0x%08X%08X,", getLogicalSwitchesStates(32),
+               getLogicalSwitchesStates(0));
+
+      for (uint8_t channel = 0; channel < MAX_OUTPUT_CHANNELS; channel++) {
+        f_printf(&g_oLogFile, "%d,", PPM_CENTER+channelOutputs[channel]/2); // in us
+      }
 
       div_t qr = div(g_vbat100mV, 10);
       int result = f_printf(&g_oLogFile, "%d.%d\n", abs(qr.quot), abs(qr.rem));
 
       if (result<0 && !error_displayed) {
         error_displayed = STR_SDCARD_ERROR;
-        POPUP_WARNING(STR_SDCARD_ERROR);
+        POPUP_WARNING_ON_UI_TASK(STR_SDCARD_ERROR, nullptr, false);
         logsClose();
       }
     }
   }
   else {
     error_displayed = nullptr;
-    if (g_oLogFile.obj.fs) {
-      logsClose();
-    }
+    logsClose();
+    
+    #if !defined(SIMU)
+    loggingTimerStop();
+    #endif
   }
 }

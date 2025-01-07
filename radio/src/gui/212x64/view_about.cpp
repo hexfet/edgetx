@@ -19,21 +19,25 @@
  * GNU General Public License for more details.
  */
 
-#include "opentx.h"
+#include "edgetx.h"
 #include "stamp.h"
 
 #define ABOUT_INDENT 6
 
-const char ABOUT_VERSION_1[] = "EdgeTX " CODENAME "(" VERSION ")";
-const char ABOUT_VERSION_2[] = "Copyright (C) 2021 EdgeTX";
+#if defined(VERSION_TAG)
+const char ABOUT_VERSION_1[] = "EdgeTX " "\"" CODENAME "\"" " (" VERSION_TAG ")";
+#else
+const char ABOUT_VERSION_1[] = "EdgeTX " "(" VERSION "-" VERSION_SUFFIX ")";
+#endif
+const char ABOUT_VERSION_2[] = "Copyright (C) " BUILD_YEAR " EdgeTX";
 const char ABOUT_VERSION_3[] = "https://edgetx.org";
 
 void menuAboutView(event_t event)
 {
   switch(event)
   {
-    case EVT_KEY_FIRST(KEY_ENTER):
-    case EVT_KEY_FIRST(KEY_EXIT):
+    case EVT_KEY_BREAK(KEY_ENTER):
+    case EVT_KEY_BREAK(KEY_EXIT):
       chainMenu(menuMainView);
       break;
   }

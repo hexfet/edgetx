@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -43,7 +44,7 @@ bool EtxFormat::load(RadioData & radioData)
     return false;
   }
 
-  bool result = CategorizedStorageFormat::load(radioData);
+  bool result = LabelsStorageFormat::load(radioData);
   mz_zip_reader_end(&zip_archive);
   return result;
 }
@@ -58,7 +59,7 @@ bool EtxFormat::write(const RadioData & radioData)
     return false;
   }
 
-  bool result = CategorizedStorageFormat::write(radioData);
+  bool result = LabelsStorageFormat::write(radioData);
   if (result) {
     // finalize archive and get contents
     char * archiveContents;

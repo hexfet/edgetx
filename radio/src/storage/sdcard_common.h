@@ -19,49 +19,31 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _SDCARD_COMMON_H_
-#define _SDCARD_COMMON_H_
+#pragma once
 
 #include "ff.h"
-
-#define DEFAULT_CATEGORY "Models"
+#include "translations.h"
 
 #define MODEL_FILENAME_PREFIX    "model"
-#if defined(SDCARD_RAW)
-#define MODEL_FILENAME_SUFFIX    ".bin"
-#elif defined(SDCARD_YAML)
 #define MODEL_FILENAME_SUFFIX    ".yml"
-#endif
 #define DEFAULT_MODEL_FILENAME   MODEL_FILENAME_PREFIX "1" MODEL_FILENAME_SUFFIX
 #define MODEL_FILENAME_PATTERN   MODEL_FILENAME_PREFIX MODEL_FILENAME_SUFFIX
 
-#if !defined(STORAGE_MODELSLIST)
-extern ModelHeader modelHeaders[MAX_MODELS];
-#endif
-
-// opens radio.bin or model file
-const char* openFileBin(const char* fullpath, FIL* file, uint16_t* size,
-                        uint8_t* version);
-
-const char* writeFileBin(const char* fullpath, const uint8_t* data,
-                         uint16_t size, uint8_t version = EEPROM_VER);
-
-// open, read, and close the file
-const char *loadFileBin(const char *fullpath, uint8_t *data,
-                        uint16_t maxsize, uint8_t *version);
-
 // writes a complete YAML file
 struct YamlNode;
-const char* writeFileYaml(const char* path, const YamlNode* root_node, uint8_t* data);
+const char* writeFileYaml(const char* path, const YamlNode* root_node, uint8_t* data, uint16_t checksum);
 
-void getModelPath(char * path, const char * filename);
+void getModelPath(char * path, const char * filename, const char* pathName = STR_MODELS_PATH);
 
-const char * readModel(const char * filename, uint8_t * buffer, uint32_t size);
+const char * readModel(const char * filename, uint8_t * buffer, uint32_t size, const char* pathName = STR_MODELS_PATH);
 const char * loadModel(char * filename, bool alarms=true);
+const char * loadModelTemplate(const char* fileName, const char* filePath);
 const char * createModel();
 const char * writeModel();
 
 #if !defined(STORAGE_MODELSLIST)
+
+extern ModelHeader modelHeaders[MAX_MODELS];
 
 // index storage vs modelslist
 void selectModel(uint8_t idx);
@@ -85,5 +67,3 @@ const char * loadRadioSettings(const char * path);
 const char * loadRadioSettings();
 
 void checkModelIdUnique(uint8_t index, uint8_t module);
-
-#endif // _SDCARD_RAW_H_

@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -43,9 +44,9 @@ bool TimerData::isEmpty() const
           persistent == 0 /*&& pvalue == 0*/);
 }
 
-bool TimerData::isModeOff()
+bool TimerData::isModeOff() const
 {
-  return swtch == RawSwitch(SWITCH_TYPE_TIMER_MODE, 0);
+  return mode == TIMERMODE_OFF;
 }
 
 QString TimerData::nameToString(int index) const
@@ -110,6 +111,10 @@ QString TimerData::countdownBeepToString(const int value)
       return tr("Voice");
     case COUNTDOWNBEEP_HAPTIC:
       return tr("Haptic");
+    case COUNTDOWNBEEP_BEEPS_AND_HAPTIC:
+      return tr("Beeps and Haptic");
+    case COUNTDOWNBEEP_VOICE_AND_HAPTIC:
+      return tr("Voice and Haptic");
     default:
       return CPN_STR_UNKNOWN_ITEM;
   }
@@ -180,6 +185,16 @@ QString TimerData::modeToString(const int value)
   }
 }
 
+QString TimerData::showElapsedToString(const unsigned int value)
+{
+  return (value) ? tr("Show Elapsed") : tr("Show Remaining");
+}
+
+QString TimerData::showElapsedToString() const
+{
+  return showElapsedToString(showElapsed);
+}
+
 //  static
 AbstractStaticItemModel * TimerData::countdownBeepItemModel()
 {
@@ -230,6 +245,19 @@ AbstractStaticItemModel * TimerData::modeItemModel()
 
   for (int i = 0; i < TIMERMODE_COUNT; i++) {
     mdl->appendToItemList(modeToString(i), i);
+  }
+
+  mdl->loadItemList();
+  return mdl;
+}
+
+AbstractStaticItemModel * TimerData::showElapsedItemModel()
+{
+  AbstractStaticItemModel *mdl = new AbstractStaticItemModel();
+  mdl->setName(AIM_TIMER_SHOWELAPSED);
+
+  for (unsigned int i = 0; i < TIMER_SHOW_COUNT; i++) {
+    mdl->appendToItemList(showElapsedToString(i), i);
   }
 
   mdl->loadItemList();

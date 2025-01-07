@@ -4,6 +4,9 @@
 set -e
 set -x
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/build-common.sh" 
+
 # Allow variable core usage
 # default uses all cpu cores
 #
@@ -68,77 +71,20 @@ do
     BUILD_OPTIONS=${COMMON_OPTIONS}
 
     echo "Testing ${target_name}"
-    case $target_name in
 
-        x9lite)
-            BUILD_OPTIONS+="-DPCB=X9LITE"
-            ;;
-        x9lites)
-            BUILD_OPTIONS+="-DPCB=X9LITES"
-            ;;
-        x7)
-            BUILD_OPTIONS+="-DPCB=X7"
-            ;;
-        x7-access)
-            BUILD_OPTIONS+="-DPCB=X7 -DPCBREV=ACCESS -DPXX1=YES"
-            ;;
-        t12)
-            BUILD_OPTIONS+="-DPCB=X7 -DPCBREV=T12 -DINTERNAL_MODULE_MULTI=ON"
-            ;;
-        tx12)
-            BUILD_OPTIONS+="-DPCB=X7 -DPCBREV=TX12"
-            ;;
-        t8)
-            BUILD_OPTIONS+="-DPCB=X7 -DPCBREV=T8"
-            ;;
-        tlite)
-            BUILD_OPTIONS+="-DPCB=X7 -DPCBREV=TLITE"
-            ;;
-        xlite)
-            BUILD_OPTIONS+="-DPCB=XLITE"
-            ;;
-        xlites)
-            BUILD_OPTIONS+="-DPCB=XLITES"
-            ;;
-        x9d)
-            BUILD_OPTIONS+="-DPCB=X9D"
-            ;;
-        x9dp)
-            BUILD_OPTIONS+="-DPCB=X9D+"
-            ;;
-        x9dp2019)
-            BUILD_OPTIONS+="-DPCB=X9D+ -DPCBREV=2019"
-            ;;
-        x9e)
-            BUILD_OPTIONS+="-DPCB=X9E"
-            ;;
-        x10)
-            BUILD_OPTIONS+="-DPCB=X10"
-            ;;
-        x10-access)
-            BUILD_OPTIONS+="-DPCB=X10 -DPCBREV=ACCESS -DPXX1=YES"
-            ;;
-        x12s)
-            BUILD_OPTIONS+="-DPCB=X12S"
-            ;;
-        t16)
-            BUILD_OPTIONS+="-DPCB=X10 -DPCBREV=T16 -DINTERNAL_MODULE_MULTI=ON"
-            ;;
-        t18)
-            BUILD_OPTIONS+="-DPCB=X10 -DPCBREV=T18"
-            ;;
-        tx16s)
-            BUILD_OPTIONS+="-DPCB=X10 -DPCBREV=TX16S"
-            ;;
-        nv14)
-            BUILD_OPTIONS+="-DPCB=NV14"
-            ;;
-    esac
+    if ! get_target_build_options "$target_name"; then
+        echo "Error: Failed to find a match for target '$target_name'"
+        exit 1
+    fi
 
     cmake ${BUILD_OPTIONS} "${SRCDIR}"
-    make -j"${CORES}" ${FIRMARE_TARGET}
-    make -j"${CORES}" libsimulator
-    make -j"${CORES}" tests-radio
 
-    rm -f CMakeCache.txt
+    cmake --build . --target arm-none-eabi-configure
+    cmake --build arm-none-eabi -j"${CORES}" --target ${FIRMARE_TARGET}
+
+    cmake --build . --target native-configure
+    cmake --build native -j"${CORES}" --target libsimulator
+    cmake --build native -j"${CORES}" --target tests-radio
+
+    rm -f CMakeCache.txt native/CMakeCache.txt arm-none-eabi/CMakeCache.txt
 done

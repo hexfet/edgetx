@@ -19,9 +19,9 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _GPS_H_
-#define _GPS_H_
+#pragma once
 
+#include "edgetx.h"
 #include <inttypes.h>
 
 struct gpsdata_t
@@ -32,15 +32,30 @@ struct gpsdata_t
   uint8_t numSat;
   uint32_t packetCount;
   uint32_t errorCount;
-  uint16_t altitude;              // altitude in 0.1m
+  int32_t altitude;               // altitude in 0.1m
   uint16_t speed;                 // speed in 0.1m/s
   uint16_t groundCourse;          // degrees * 10
   uint16_t hdop;
 };
 
 extern gpsdata_t gpsData;
+
+#if defined(DEBUG)
+extern uint8_t gpsTraceEnabled;
+#endif
+
+#define GPS_PROTOCOL_AUTO 0
+#define GPS_PROTOCOL_NMEA 1
+#define GPS_PROTOCOL_UBX 2
+
+// Setup GPS serial port
+void gpsSetSerialDriver(void* ctx, const etx_serial_driver_t* drv,
+                        int protocol);
+
+// Periodic processing
 void gpsWakeup();
 
-void gpsSendFrame(const char * frame);
+// Send a 0-terminated frame
+void gpsSendFrame(const char* frame);
 
-#endif // _GPS_H_
+uint32_t GPS_coord_to_degrees(const char* coordinateString);

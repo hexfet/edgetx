@@ -22,37 +22,11 @@
 #include "layout.h"
 #include "layout_factory_impl.h"
 
-const uint8_t LBM_LAYOUT_1x2[] = {
-#include "mask_layout1x2.lbm"
+static const uint8_t zmap[] = {
+    LAYOUT_MAP_0, LAYOUT_MAP_0, LAYOUT_MAP_FULL, LAYOUT_MAP_HALF,
+    LAYOUT_MAP_0, LAYOUT_MAP_HALF, LAYOUT_MAP_FULL, LAYOUT_MAP_HALF,
 };
 
-const ZoneOption OPTIONS_LAYOUT_1x2[] =  {
-  LAYOUT_COMMON_OPTIONS,
-  LAYOUT_OPTIONS_END
-};
-
-class Layout1x2: public Layout
-{
-  public:
-    Layout1x2(const LayoutFactory * factory, Layout::PersistentData * persistentData):
-      Layout(factory, persistentData)
-    {
-    }
-
-    unsigned int getZonesCount() const override
-    {
-      return 2;
-    }
-
-    rect_t getZone(unsigned int index) const override
-    {
-      rect_t zone = getMainZone();
-
-      zone.h /= 2;
-      zone.y += zone.h * index;
-
-      return zone;
-    }
-};
-
-BaseLayoutFactory<Layout1x2> Layout1x2("Layout1x2", "1 x 2", LBM_LAYOUT_1x2, OPTIONS_LAYOUT_1x2);
+BaseLayoutFactory<Layout> Layout1x2("Layout1x2", "1 x 2",
+                                    defaultZoneOptions,
+                                    2, (uint8_t*)zmap);

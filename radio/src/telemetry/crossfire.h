@@ -19,8 +19,7 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _CROSSFIRE_H_
-#define _CROSSFIRE_H_
+#pragma once
 
 #include <inttypes.h>
 #include "dataconstants.h"
@@ -29,11 +28,13 @@
 #define BROADCAST_ADDRESS              0x00
 #define RADIO_ADDRESS                  0xEA
 #define MODULE_ADDRESS                 0xEE
+#define RECEIVER_ADDRESS               0xEC
 
 // Frame id
 #define GPS_ID                         0x02
 #define CF_VARIO_ID                    0x07
 #define BATTERY_ID                     0x08
+#define BARO_ALT_ID                    0x09
 #define LINK_ID                        0x14
 #define CHANNELS_ID                    0x16
 #define LINK_RX_ID                     0x1C
@@ -49,13 +50,16 @@
 #define UART_SYNC                      0xC8
 #define SUBCOMMAND_CRSF                0x10
 #define COMMAND_MODEL_SELECT_ID        0x05
+#define SUBCOMMAND_CRSF_BIND           0x01
+
+constexpr uint8_t CRSF_NAME_MAXSIZE = 16;
 
 struct CrossfireSensor {
   const uint8_t id;
   const uint8_t subId;
-  const char * name;
   const TelemetryUnit unit;
   const uint8_t precision;
+  const char * name;
 };
 
 enum CrossfireSensorIndexes {
@@ -89,6 +93,7 @@ enum CrossfireSensorIndexes {
   ATTITUDE_YAW_INDEX,
   FLIGHT_MODE_INDEX,
   VERTICAL_SPEED_INDEX,
+  BARO_ALTITUDE_INDEX,
   UNKNOWN_INDEX,
 };
 
@@ -98,9 +103,21 @@ enum CrossfireFrames{
   CRSF_FRAME_MODELID_SENT
 };
 
-void processCrossfireTelemetryData(uint8_t data, uint8_t module);
+struct CrossfireModuleStatus
+{
+    uint8_t major;
+    uint8_t minor;
+    uint8_t revision;
+    char name[CRSF_NAME_MAXSIZE];
+    bool queryCompleted;
+    bool isELRS;
+};
+
+extern CrossfireModuleStatus crossfireModuleStatus[2];
+
+void processCrossfireTelemetryFrame(uint8_t module, uint8_t* rxBuffer,
+                                    uint8_t rxBufferCount);
 void crossfireSetDefault(int index, uint8_t id, uint8_t subId);
-uint8_t createCrossfireModelIDFrame(uint8_t * frame);
 
 const uint32_t CROSSFIRE_BAUDRATES[] = {
   115200,
@@ -110,12 +127,20 @@ const uint32_t CROSSFIRE_BAUDRATES[] = {
   3750000,
   5250000,
 };
+
+#if defined(RADIO_TPRO) || defined(RADIO_TPROV2) || defined(RADIO_T20)
+#define CROSSFIRE_MAX_INTERNAL_BAUDRATE     DIM(CROSSFIRE_BAUDRATES) - 3
+#else
+#define CROSSFIRE_MAX_INTERNAL_BAUDRATE     DIM(CROSSFIRE_BAUDRATES) - 1
+#endif
+
 const uint8_t CROSSFIRE_FRAME_PERIODS[] = {
   16,
   4,
-  4,
-  4,
-  4,
+  2,
+  2,
+  2,
+  2,
 };
 #if SPORT_MAX_BAUDRATE < 400000
   // index 0 (115200) is the default 0 value
@@ -131,9 +156,33 @@ const uint8_t CROSSFIRE_FRAME_PERIODS[] = {
         % DIM(CROSSFIRE_BAUDRATES)
 #endif
 
-#define CROSSFIRE_BAUDRATE    CROSSFIRE_BAUDRATES[CROSSFIRE_STORE_TO_INDEX(g_eeGeneral.telemetryBaudrate)]
-#define CROSSFIRE_PERIOD      (CROSSFIRE_FRAME_PERIODS[CROSSFIRE_STORE_TO_INDEX(g_eeGeneral.telemetryBaudrate)] * 1000)
+#define CRSF_ELRS_MIN_VER(moduleIdx, maj, min) \
+        (crossfireModuleStatus[moduleIdx].isELRS \
+         && (crossfireModuleStatus[moduleIdx].major > maj \
+          || (crossfireModuleStatus[moduleIdx].major == maj \
+           && crossfireModuleStatus[moduleIdx].minor >= min)))
+
+#if defined(HARDWARE_INTERNAL_MODULE)
+#define INT_CROSSFIRE_BR_IDX   CROSSFIRE_STORE_TO_INDEX(g_eeGeneral.internalModuleBaudrate)
+#define INT_CROSSFIRE_BAUDRATE CROSSFIRE_BAUDRATES[INT_CROSSFIRE_BR_IDX]
+#define INT_CROSSFIRE_PERIOD   (CROSSFIRE_FRAME_PERIODS[INT_CROSSFIRE_BR_IDX] * 1000)
+#endif
+
+#if defined(HARDWARE_EXTERNAL_MODULE)
+#define EXT_CROSSFIRE_BR_IDX   CROSSFIRE_STORE_TO_INDEX(g_model.moduleData[EXTERNAL_MODULE].crsf.telemetryBaudrate)
+#define EXT_CROSSFIRE_BAUDRATE CROSSFIRE_BAUDRATES[EXT_CROSSFIRE_BR_IDX]
+#define EXT_CROSSFIRE_PERIOD   (CROSSFIRE_FRAME_PERIODS[EXT_CROSSFIRE_BR_IDX] * 1000)
+#endif
+
+#if defined(HARDWARE_INTERNAL_MODULE) && defined(HARDWARE_EXTERNAL_MODULE)
+#define CROSSFIRE_PERIOD(module) \
+  (module == INTERNAL_MODULE ? INT_CROSSFIRE_PERIOD : EXT_CROSSFIRE_PERIOD)
+#elif defined(HARDWARE_INTERNAL_MODULE)
+#define CROSSFIRE_PERIOD(module) INT_CROSSFIRE_PERIOD
+#elif defined(HARDWARE_EXTERNAL_MODULE)
+#define CROSSFIRE_PERIOD(module) EXT_CROSSFIRE_PERIOD
+#else
+#define CROSSFIRE_PERIOD(module) 4000
+#endif
 
 #define CROSSFIRE_TELEM_MIRROR_BAUDRATE   115200
-
-#endif // _CROSSFIRE_H_

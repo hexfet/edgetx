@@ -29,6 +29,16 @@ boards = {
         "PCBREV": "TX12",
         "DEFAULT_MODE": "2",
     },
+    "TX12MK2_1": {
+        "PCB": "X7",
+        "PCBREV": "TX12MK2",
+        "DEFAULT_MODE": "1",
+    },
+    "TX12MK2_2": {
+        "PCB": "X7",
+        "PCBREV": "TX12MK2",
+        "DEFAULT_MODE": "2",
+    },
     "ZORRO_1": {
         "PCB": "X7",
         "PCBREV": "ZORRO",
@@ -37,6 +47,36 @@ boards = {
     "ZORRO_2": {
         "PCB": "X7",
         "PCBREV": "ZORRO",
+        "DEFAULT_MODE": "2",
+    },
+    "BOXER_1": {
+        "PCB": "X7",
+        "PCBREV": "BOXER",
+        "DEFAULT_MODE": "1",
+    },
+    "BOXER_2": {
+        "PCB": "X7",
+        "PCBREV": "BOXER",
+        "DEFAULT_MODE": "2",
+    },
+    "POCKET_1": {
+        "PCB": "X7",
+        "PCBREV": "POCKET",
+        "DEFAULT_MODE": "1",
+    },
+    "POCKET_2": {
+        "PCB": "X7",
+        "PCBREV": "POCKET",
+        "DEFAULT_MODE": "2",
+    },
+    "MT12_1": {
+        "PCB": "X7",
+        "PCBREV": "MT12",
+        "DEFAULT_MODE": "1",
+    },
+    "MT12_2": {
+        "PCB": "X7",
+        "PCBREV": "MT12",
         "DEFAULT_MODE": "2",
     },
     "T8_1": {
@@ -79,7 +119,7 @@ def build(board, translation, srcdir):
         suffix = "" if index == 0 else "_%d" % index
         filename = "output/firmware_%s_%s_%s%s.bin" % (board.lower(), translation.lower(), timestamp(), suffix)
         if not os.path.exists(filename):
-            shutil.copy("%s/firmware.bin" % path, filename)
+            shutil.copy("%s/arm-none-eabi/firmware.bin" % path, filename)
             break
         index += 1
     shutil.rmtree(path)

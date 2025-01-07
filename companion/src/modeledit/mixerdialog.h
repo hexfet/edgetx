@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -18,17 +19,16 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _MIXERDIALOG_H_
-#define _MIXERDIALOG_H_
+#pragma once
 
 #include <QtWidgets>
 #include "eeprominterface.h"
 
-class GVarGroup;
 class CompoundItemModelFactory;
 class FilteredItemModelFactory;
 class CurveRefFilteredFactory;
 class CurveReferenceUIManager;
+class SourceNumRefEditor;
 
 namespace Ui {
   class MixerDialog;
@@ -37,7 +37,7 @@ namespace Ui {
 class MixerDialog : public QDialog {
     Q_OBJECT
   public:
-    MixerDialog(QWidget *parent, ModelData & model, MixData *mixdata, GeneralSettings & generalSettings, Firmware * firmware,
+    MixerDialog(QWidget *parent, ModelData & model, MixData *mixdata, int index, GeneralSettings & generalSettings, Firmware * firmware,
                 CompoundItemModelFactory * sharedItemModels);
     ~MixerDialog();
 
@@ -46,7 +46,6 @@ class MixerDialog : public QDialog {
 
   private slots:
     void valuesChanged();
-    void shrink();
     void label_phases_customContextMenuRequested(const QPoint & pos);
     void fmClearAll();
     void fmSetAll();
@@ -59,12 +58,12 @@ class MixerDialog : public QDialog {
     Firmware * firmware;
     MixData *md;
     bool lock;
-    GVarGroup * gvWeightGroup;
-    GVarGroup * gvOffsetGroup;
+    SourceNumRefEditor * weightEditor;
+    SourceNumRefEditor * offsetEditor;
     CurveReferenceUIManager * curveGroup;
     QCheckBox * cb_fp[CPN_MAX_FLIGHT_MODES];
     FilteredItemModelFactory *dialogFilteredItemModels;
     CurveRefFilteredFactory *curveRefFilteredItemModels;
-};
 
-#endif // _MIXERDIALOG_H_
+    void shrink();
+};

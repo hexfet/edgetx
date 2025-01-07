@@ -43,6 +43,11 @@ boards = {
     "X12S": {
         "PCB": "X12S",
     },
+    "T15": {
+        "PCB": "X10",
+        "PCBREV": "T15",
+        "INTERNAL_MODULE_CRSF": "YES"
+    },
     "T16": {
         "PCB": "X10",
         "PCBREV": "T16",
@@ -58,6 +63,24 @@ boards = {
         "PCBREV": "TX16S",
         "INTERNAL_MODULE_MULTI": "YES"
     },
+    "F16": {
+        "PCB": "X10",
+        "PCBREV": "F16",
+        "INTERNAL_MODULE_MULTI": "YES"
+    },
+    "V12": {
+        "PCB": "X7",
+        "PCBREV": "V12",
+    },
+    "V14": {
+        "PCB": "X7",
+        "PCBREV": "V14",
+    },
+    "V16": {
+        "PCB": "X10",
+        "PCBREV": "V16",
+        "INTERNAL_MODULE_MULTI": "YES"
+    },
     "T12": {
         "PCB": "X7",
         "PCBREV": "T12",
@@ -65,5 +88,17 @@ boards = {
     "TX12": {
         "PCB": "X7",
         "PCBREV": "TX12",
+    },
+    "COMMANDO8": {
+        "PCB": "X7",
+        "PCBREV": "COMMANDO8",
+    },
+    "T20": {
+        "PCB": "X7",
+        "PCBREV": "T20",
+    },
+    "T14": {
+        "PCB": "X7",
+        "PCBREV": "T14",
     },
 }

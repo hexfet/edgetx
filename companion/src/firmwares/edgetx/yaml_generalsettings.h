@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -21,6 +22,14 @@
 #include "yaml_ops.h"
 #include "generalsettings.h"
 
+struct YamlTelemetryBaudrate {
+  unsigned int value;
+
+  YamlTelemetryBaudrate() = default;
+  YamlTelemetryBaudrate(const unsigned int* moduleBaudrate);
+  void toCpn(unsigned int* moduleBaudrate, unsigned int variant);
+};
+
 namespace YAML {
 
   template<>
@@ -30,5 +39,3 @@ namespace YAML {
     static bool decode(const Node& node, GeneralSettings& rhs);
   };
 }
-
-

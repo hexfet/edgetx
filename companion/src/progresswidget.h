@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -18,14 +19,9 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _PROGRESSWIDGET_H_
-#define _PROGRESSWIDGET_H_
+#pragma once
 
 #include <QWidget>
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 5, 0))
-  #define QtInfoMsg    QtMsgType(4)
-#endif
 
 namespace Ui {
   class ProgressWidget;
@@ -56,11 +52,14 @@ class ProgressWidget : public QWidget
     void forceOpen();
     void stop();
     void clearDetails() const;
+    void forceKeepOpen(bool value);
+    void refresh();
 
   signals:
     void detailsToggled();
     void locked(bool);
     void stopped();
+    void keepOpen(bool);
 
   protected slots:
     void toggleDetails();
@@ -71,5 +70,3 @@ class ProgressWidget : public QWidget
     bool m_forceOpen;
     bool m_hasDetails;
 };
-
-#endif // _PROGRESSWIDGET_H_

@@ -19,16 +19,34 @@
  * GNU General Public License for more details.
  */
 
-#include "opentx.h"
-#include "i2c_driver.h"
+#include "hal/gpio.h"
+#include "hal/i2c_driver.h"
+#include "stm32_gpio.h"
+#include "stm32_hal_ll.h"
+#include "stm32_hal.h"
+#include "stm32_i2c_driver.h"
+#include "stm32_gpio_driver.h"
+#include "stm32_exti_driver.h"
+
+#include "hal.h"
 #include "tp_gt911.h"
+#include "delays_driver.h"
+
+#include "rtos.h"
+#include "edgetx_types.h"
+#include "debug.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+#define TP_GT911_ID "911"
 
 #if defined (RADIO_T18)
 const uint8_t TOUCH_GT911_Cfg[] = {
-    GT911_CFG_NUMER,  // 0x8047 Config version
+    GT911_CFG_NUMBER,  // 0x8047 Config version
     0xE0,             // 0x8048 X output map : x 480
     0x01,
-    0x10,  // 0x804A Y ouptut max : y 272
+    0x10,          // 0x804A Y ouptut max : y 272
     0x01,
     GT911_MAX_TP,  // 0x804C Touch number
     0x0C,          // 0x804D Module switch 1 : bit4= xy change Int mode
@@ -216,13 +234,17 @@ const uint8_t TOUCH_GT911_Cfg[] = {
 //GT911 param table
 const uint8_t TOUCH_GT911_Cfg[] =
   {
-    GT911_CFG_NUMER,     // 0x8047 Config version
+    GT911_CFG_NUMBER,    // 0x8047 Config version
     0xE0,                // 0x8048 X output map : x 480
     0x01,
     0x10,                // 0x804A Y ouptut max : y 272
     0x01,
     GT911_MAX_TP,        // 0x804C Touch number
+#if defined(TOUCH_PANEL_INVERTED)
+    0x3C | 0xC0,         // 0x804D Module switch 1 : 180° rotation
+#else
     0x3C,                // 0x804D Module switch 1 : bit4= xy change Int mode
+#endif
     0x20,                // 0x804E Module switch 2
     0x22,                // 0x804F Shake_Count
     0x0A,                // 0x8050 Filter
@@ -409,270 +431,175 @@ volatile static bool touchEventOccured = false;
 struct TouchData touchData;
 uint16_t touchGT911fwver = 0;
 uint32_t touchGT911hiccups = 0;
-tmr10ms_t downTime = 0;
-tmr10ms_t tapTime = 0;
-short tapCount = 0;
-#define TAP_TIME 25
 
-I2C_HandleTypeDef hi2c1;
+static tmr10ms_t downTime = 0;
+static tmr10ms_t tapTime = 0;
+static short tapCount = 0;
 
 static TouchState internalTouchState = {};
 
-static void TOUCH_AF_ExtiStop(void)
+static void _gt911_exti_isr(void)
 {
-  SYSCFG_EXTILineConfig(TOUCH_INT_EXTI_PortSource, TOUCH_INT_EXTI_PinSource1);
-
-  EXTI_InitTypeDef EXTI_InitStructure;
-  EXTI_StructInit(&EXTI_InitStructure);
-  EXTI_InitStructure.EXTI_Line = TOUCH_INT_EXTI_LINE1;
-  EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
-  EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
-  EXTI_InitStructure.EXTI_LineCmd = DISABLE;
-  EXTI_Init(&EXTI_InitStructure);
-
-
-  NVIC_InitTypeDef NVIC_InitStructure;
-  NVIC_InitStructure.NVIC_IRQChannel = TOUCH_INT_EXTI_IRQn1;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 9;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0; /* Not used as 4 bits are used for the pre-emption priority. */;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = DISABLE;
-  NVIC_Init(&NVIC_InitStructure);
-}
-
-static void TOUCH_AF_ExtiConfig(void)
-{
-  SYSCFG_EXTILineConfig(TOUCH_INT_EXTI_PortSource, TOUCH_INT_EXTI_PinSource1);
-
-  EXTI_InitTypeDef EXTI_InitStructure;
-  EXTI_StructInit(&EXTI_InitStructure);
-  EXTI_InitStructure.EXTI_Line = TOUCH_INT_EXTI_LINE1;
-  EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
-  EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
-  EXTI_InitStructure.EXTI_LineCmd = ENABLE;
-  EXTI_Init(&EXTI_InitStructure);
-
-  NVIC_InitTypeDef NVIC_InitStructure;
-  NVIC_InitStructure.NVIC_IRQChannel = TOUCH_INT_EXTI_IRQn1;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 9;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0; /* Not used as 4 bits are used for the pre-emption priority. */;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-}
-
-static void TOUCH_AF_GPIOConfig(void)
-{
-  GPIO_InitTypeDef GPIO_InitStructure;
-  GPIO_InitStructure.GPIO_Pin = TOUCH_RST_GPIO_PIN;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init(TOUCH_RST_GPIO, &GPIO_InitStructure);
-
-  GPIO_ResetBits(TOUCH_RST_GPIO, TOUCH_RST_GPIO_PIN);
-
-  GPIO_InitStructure.GPIO_Pin = TOUCH_INT_GPIO_PIN;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init(TOUCH_INT_GPIO, &GPIO_InitStructure);
-
-  GPIO_ResetBits(TOUCH_INT_GPIO, TOUCH_INT_GPIO_PIN);
-}
-
-void TOUCH_AF_INT_Change(void)
-{
-  GPIO_InitTypeDef GPIO_InitStructure;
-
-  GPIO_InitStructure.GPIO_Pin = TOUCH_INT_GPIO_PIN;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;
-  GPIO_Init(TOUCH_INT_GPIO, &GPIO_InitStructure);
+  touchEventOccured = true;
 }
 
 void I2C_Init_Radio(void)
 {
-  TRACE("I2C B1 Init");
+  TRACE("GT911 I2C Init");
 
-  hi2c1.Instance = I2C_B1;
-  hi2c1.Init.ClockSpeed = I2C_B1_CLK_RATE;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_16_9;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-      TRACE("I2C B1 ERROR: HAL_I2C_Init() failed");
-  }
-  // Configure Analogue filter
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-      TRACE("I2C B1 ERROR: HAL_I2CEx_ConfigAnalogFilter() failed");
-  }
-  // Configure Digital filter
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-      TRACE("I2C B1 ERROR: HAL_I2CEx_ConfigDigitalFilter() failed");
+  if (i2c_init(TOUCH_I2C_BUS) < 0) {
+    TRACE("GT911 ERROR: i2c_init failed");
+    return;
   }
 }
 
-bool I2C_GT911_WriteRegister(uint16_t reg, uint8_t * buf, uint8_t len)
+bool I2C_GT911_WriteRegister(uint16_t reg, uint8_t *buf, uint8_t len)
 {
-    uint8_t uAddrAndBuf[258];
-    uAddrAndBuf[0] = (uint8_t)((reg & 0xFF00) >> 8);
-    uAddrAndBuf[1] = (uint8_t)(reg & 0x00FF);
+  uint8_t uAddrAndBuf[258];
+  uAddrAndBuf[0] = (uint8_t)((reg & 0xFF00) >> 8);
+  uAddrAndBuf[1] = (uint8_t)(reg & 0x00FF);
 
-    if (len > 0)
-    {
-        for (int i = 0;i < len;i++)
-        {
-            uAddrAndBuf[i + 2] = buf[i];
-        }
+  if (len > 0) {
+    for (int i = 0; i < len; i++) {
+      uAddrAndBuf[i + 2] = buf[i];
     }
+  }
 
-    if (HAL_I2C_Master_Transmit(&hi2c1, GT911_I2C_ADDR << 1, uAddrAndBuf, len + 2, 100) != HAL_OK)
-    {
-        TRACE("I2C B1 ERROR: WriteRegister failed");
-        return false;
-    }
-    return true;
+  if (stm32_i2c_master_tx(TOUCH_I2C_BUS, GT911_I2C_ADDR, uAddrAndBuf, len + 2,
+                          100) < 0) {
+    TRACE("I2C B1 ERROR: WriteRegister failed");
+    return false;
+  }
+  return true;
 }
 
-bool I2C_GT911_ReadRegister(uint16_t reg, uint8_t * buf, uint8_t len)
+bool I2C_GT911_ReadRegister(uint16_t reg, uint8_t *buf, uint8_t len)
 {
-    uint8_t uRegAddr[2];
-    uRegAddr[0] = (uint8_t)((reg & 0xFF00) >> 8);
-    uRegAddr[1] = (uint8_t)(reg & 0x00FF);
+  uint8_t uRegAddr[2];
+  uRegAddr[0] = (uint8_t)((reg & 0xFF00) >> 8);
+  uRegAddr[1] = (uint8_t)(reg & 0x00FF);
 
-    if (HAL_I2C_Master_Transmit(&hi2c1, GT911_I2C_ADDR << 1, uRegAddr, 2, 10) != HAL_OK)
-    {
-        TRACE("I2C B1 ERROR: ReadRegister write reg address failed");
-        return false;
-    }
+  if (stm32_i2c_master_tx(TOUCH_I2C_BUS, GT911_I2C_ADDR, uRegAddr, 2, 10) < 0) {
+    TRACE("I2C B1 ERROR: ReadRegister write reg address failed");
+    return false;
+  }
 
-    if (HAL_I2C_Master_Receive(&hi2c1, GT911_I2C_ADDR << 1, buf, len, 100) != HAL_OK)
-    {
-        TRACE("I2C B1 ERROR: ReadRegister read reg address failed");
-        return false;
-    }
-    return true;
+  if (stm32_i2c_master_rx(TOUCH_I2C_BUS, GT911_I2C_ADDR, buf, len, 100) < 0) {
+    TRACE("I2C B1 ERROR: ReadRegister read reg address failed");
+    return false;
+  }
+  return true;
 }
 
-bool I2C_GT911_SendConfig(void)
+bool I2C_GT911_SendConfig(uint8_t cfgVer)
 {
-  uint8_t buf[2];
-  uint8_t i = 0;
-  buf[0] = 0;
-  buf[1] = 1;
+  uint8_t buf[2] = { cfgVer, 1 };
   bool bResult = true;
 
-  for (i = 0; i < sizeof(TOUCH_GT911_Cfg); i++)
-    buf[0] += TOUCH_GT911_Cfg[i];//check sum
-
+  for (uint8_t i = 1; i < sizeof(TOUCH_GT911_Cfg); i++) {
+    buf[0] += TOUCH_GT911_Cfg[i]; //check sum
+  }
+  
   buf[0] = (~buf[0]) + 1;
-  if (!I2C_GT911_WriteRegister(GT_CFGS_REG, (uint8_t *) TOUCH_GT911_Cfg, sizeof(TOUCH_GT911_Cfg)))
-  {
+
+  if (!I2C_GT911_WriteRegister(GT911_CONFIG_REG, (uint8_t *)&cfgVer, 1)) {
     TRACE("GT911 ERROR: write config failed");
     bResult = false;
   }
 
-  if (!I2C_GT911_WriteRegister(GT_CHECK_REG, buf, 2)) //write checksum
-  {
+  if (!I2C_GT911_WriteRegister(GT911_CONFIG_REG+1, (uint8_t *)&TOUCH_GT911_Cfg[1],
+                               sizeof(TOUCH_GT911_Cfg)-1)) {
+    TRACE("GT911 ERROR: write config failed");
+    bResult = false;
+  }
+
+  // write checksum and config_fresh
+  if (!I2C_GT911_WriteRegister(GT911_CONFIG_CHECKSUM_REG, buf, 2)) {
     TRACE("GT911 ERROR: write config checksum failed");
     bResult = false;
   }
+
   return bResult;
 }
 
 void touchPanelDeInit(void)
 {
-  TOUCH_AF_ExtiStop();
+  gpio_int_disable(TOUCH_INT_GPIO);
   touchGT911Flag = false;
 }
+
+uint8_t tp_gt911_cfgVer = GT911_CFG_NUMBER;
 
 bool touchPanelInit(void)
 {
   uint8_t tmp[4] = {0};
 
   if (touchGT911Flag) {
-    TOUCH_AF_ExtiConfig();
+    gpio_init_int(TOUCH_INT_GPIO, GPIO_IN_PU, GPIO_RISING, _gt911_exti_isr);
     return true;
-  }
-  else {
+  } else {
     TRACE("Touchpanel init start ...");
 
-    TOUCH_AF_GPIOConfig(); //SET RST=OUT INT=OUT INT=LOW
+    gpio_init(TOUCH_RST_GPIO, GPIO_OUT, GPIO_PIN_SPEED_LOW);
+    gpio_init(TOUCH_INT_GPIO, GPIO_OUT, GPIO_PIN_SPEED_LOW);
     I2C_Init_Radio();
 
-    TPRST_LOW();
-    TPINT_HIGH();
+    gpio_clear(TOUCH_RST_GPIO);
+    gpio_set(TOUCH_INT_GPIO);
     delay_us(200);
 
-    TPRST_HIGH();
+    gpio_set(TOUCH_RST_GPIO);
     delay_ms(6);
 
-    TPINT_LOW();
+    gpio_clear(TOUCH_INT_GPIO);
     delay_ms(55);
 
-    TOUCH_AF_INT_Change();  //Set INT INPUT INT=LOW
+    gpio_init(TOUCH_INT_GPIO, GPIO_IN_PU, GPIO_PIN_SPEED_LOW);
 
     delay_ms(50);
 
     TRACE("Reading Touch registry");
-    if (!I2C_GT911_ReadRegister(GT_PID_REG, tmp, 4))
-    {
+    if (!I2C_GT911_ReadRegister(GT911_PRODUCT_ID_REG, tmp, 4)) {
       TRACE("GT911 ERROR: Product ID read failed");
     }
 
-    if (strcmp((char *) tmp, "911") == 0) //ID==9147
-    {
+    if (strcmp((char *)tmp, TP_GT911_ID) == 0) {
       TRACE("GT911 chip detected");
       tmp[0] = 0X02;
-      if (!I2C_GT911_WriteRegister(GT_CTRL_REG, tmp, 1))
-      {
+      if (!I2C_GT911_WriteRegister(GT911_COMMAND_REG, tmp, 1)) {
         TRACE("GT911 ERROR: write to control register failed");
       }
-      if (!I2C_GT911_ReadRegister(GT_CFGS_REG, tmp, 1))
-      {
-          TRACE("GT911 ERROR: configuration register read failed");
+      if (!I2C_GT911_ReadRegister(GT911_CONFIG_REG, tmp, 1)) {
+        TRACE("GT911 ERROR: configuration register read failed");
       }
 
       TRACE("Chip config Ver:%x", tmp[0]);
-      if (tmp[0] < GT911_CFG_NUMER)  //Config ver
-      {
-        TRACE("Sending new config %d", GT911_CFG_NUMER);
-        if (!I2C_GT911_SendConfig())
-        {
+      if ((tp_gt911_cfgVer == 0) || (tmp[0] < tp_gt911_cfgVer)) { // Config ver
+        TRACE("Sending new config %d", GT911_CFG_NUMBER);
+        if (!I2C_GT911_SendConfig(tp_gt911_cfgVer)) {
           TRACE("GT911 ERROR: sending configration failed");
         }
+        if (!I2C_GT911_ReadRegister(GT911_CONFIG_REG, tmp, 1)) {
+          TRACE("GT911 ERROR: configuration register read failed");
+        }
+        tp_gt911_cfgVer = tmp[0];
       }
 
-      if (!I2C_GT911_ReadRegister(GT911_FIRMWARE_VERSION_REG, tmp, 2))
-      {
+      if (!I2C_GT911_ReadRegister(GT911_FIRMWARE_VERSION_REG, tmp, 2)) {
         TRACE("GT911 ERROR: reading firmware version failed");
-      }
-      else
-      {
-          touchGT911fwver = (tmp[1] << 8) + tmp[0];
-          TRACE("GT911 FW version: %u", touchGT911fwver);
+      } else {
+        touchGT911fwver = (tmp[1] << 8) + tmp[0];
+        TRACE("GT911 FW version: %u", touchGT911fwver);
       }
 
       delay_ms(10);
       tmp[0] = 0X00;
-      if (!I2C_GT911_WriteRegister(GT_CTRL_REG, tmp, 1))  //end reset
-      {
-        TRACE("GT911 ERROR: write to control register failed");
+      if (!I2C_GT911_WriteRegister(GT911_COMMAND_REG, tmp, 1)) { // end reset
+        TRACE("GT911 ERROR: write to command register failed");
       }
       touchGT911Flag = true;
 
-      TOUCH_AF_ExtiConfig();
-
+      gpio_init_int(TOUCH_INT_GPIO, GPIO_IN_PU, GPIO_RISING, _gt911_exti_isr);
 
       return true;
     }
@@ -683,37 +610,35 @@ bool touchPanelInit(void)
 
 bool I2C_ReInit(void)
 {
-    TRACE("I2C B1 ReInit");
-    touchPanelDeInit();
-    if (HAL_I2C_DeInit(&hi2c1) != HAL_OK)
-        TRACE("I2C B1 ReInit - I2C DeInit failed");
+  TRACE("I2C B1 ReInit");
+  touchPanelDeInit();
+  if (stm32_i2c_deinit(TOUCH_I2C_BUS) < 0)
+    TRACE("I2C B1 ReInit - I2C DeInit failed");
 
-    // If DeInit fails, try to re-init anyway
-    if (!touchPanelInit())
-    {
-        TRACE("I2C B1 ReInit - touchPanelInit failed");
-        return false;
-    }
-    return true;
+  // If DeInit fails, try to re-init anyway
+  if (!touchPanelInit()) {
+    TRACE("I2C B1 ReInit - touchPanelInit failed");
+    return false;
+  }
+  return true;
 }
 
-
 #if defined(SIMU) || defined(SEMIHOSTING) || defined(DEBUG)
-static const char* event2str(uint8_t ev)
+static const char *event2str(uint8_t ev)
 {
-  switch(ev){
-  case TE_NONE:
-    return "NONE";
-  case TE_UP:
-    return "UP";
-  case TE_DOWN:
-    return "DOWN";
-  case TE_SLIDE_END:
-    return "SLIDE_END";
-  case TE_SLIDE:
-    return "SLIDE";
-  default:
-    return "UNKNOWN";
+  switch (ev) {
+    case TE_NONE:
+      return "NONE";
+    case TE_UP:
+      return "UP";
+    case TE_DOWN:
+      return "DOWN";
+    case TE_SLIDE_END:
+      return "SLIDE_END";
+    case TE_SLIDE:
+      return "SLIDE";
+    default:
+      return "UNKNOWN";
   }
 }
 #endif
@@ -722,19 +647,17 @@ struct TouchState touchPanelRead()
 {
   uint8_t state = 0;
 
-  if (!touchEventOccured)
-    return internalTouchState;
+  if (!touchEventOccured) return internalTouchState;
 
   touchEventOccured = false;
 
   uint32_t startReadStatus = RTOS_GET_MS();
   do {
     if (!I2C_GT911_ReadRegister(GT911_READ_XY_REG, &state, 1)) {
-      //ledRed();
+      // ledRed();
       touchGT911hiccups++;
       TRACE("GT911 I2C read XY error");
-      if (!I2C_ReInit())
-          TRACE("I2C B1 ReInit failed");
+      if (!I2C_ReInit()) TRACE("I2C B1 ReInit failed");
       return internalTouchState;
     }
 
@@ -743,35 +666,40 @@ struct TouchState touchPanelRead()
       break;
     }
     RTOS_WAIT_MS(1);
-  } while(RTOS_GET_MS() - startReadStatus < GT911_TIMEOUT);
+  } while (RTOS_GET_MS() - startReadStatus < GT911_TIMEOUT);
 
   internalTouchState.deltaX = 0;
   internalTouchState.deltaY = 0;
   TRACE("touch state = 0x%x", state);
   if (state & 0x80u) {
     uint8_t pointsCount = (state & 0x0Fu);
-    tmr10ms_t now = get_tmr10ms();
+    uint32_t now = RTOS_GET_MS();
     internalTouchState.tapCount = 0;
 
     if (pointsCount > 0 && pointsCount <= GT911_MAX_TP) {
       if (!I2C_GT911_ReadRegister(GT911_READ_XY_REG + 1, touchData.data,
                                   pointsCount * sizeof(TouchPoint))) {
-        //ledRed();
+        // ledRed();
         touchGT911hiccups++;
         TRACE("GT911 I2C data read error");
-        if (!I2C_ReInit())
-            TRACE("I2C B1 ReInit failed");
+        if (!I2C_ReInit()) TRACE("I2C B1 ReInit failed");
         return internalTouchState;
       }
-      if (internalTouchState.event == TE_NONE || internalTouchState.event == TE_UP ||
+        
+      if (internalTouchState.event == TE_NONE ||
+          internalTouchState.event == TE_UP ||
           internalTouchState.event == TE_SLIDE_END) {
         internalTouchState.event = TE_DOWN;
-        internalTouchState.startX = internalTouchState.x = touchData.points[0].x;
-        internalTouchState.startY = internalTouchState.y = touchData.points[0].y;
+        internalTouchState.startX = internalTouchState.x =
+            touchData.points[0].x;
+        internalTouchState.startY = internalTouchState.y =
+            touchData.points[0].y;
         downTime = now;
       } else {
-        internalTouchState.deltaX = touchData.points[0].x - internalTouchState.x;
-        internalTouchState.deltaY = touchData.points[0].y - internalTouchState.y;
+        internalTouchState.deltaX =
+            touchData.points[0].x - internalTouchState.x;
+        internalTouchState.deltaY =
+            touchData.points[0].y - internalTouchState.y;
         if (internalTouchState.event == TE_SLIDE ||
             abs(internalTouchState.deltaX) >= SLIDE_RANGE ||
             abs(internalTouchState.deltaY) >= SLIDE_RANGE) {
@@ -785,8 +713,8 @@ struct TouchState touchPanelRead()
         internalTouchState.event = TE_SLIDE_END;
       } else if (internalTouchState.event == TE_DOWN) {
         internalTouchState.event = TE_UP;
-        if (now - downTime <= TAP_TIME) {
-          if (now - tapTime > TAP_TIME)
+        if (now - downTime <= GT911_TAP_TIME) {
+          if (now - tapTime > GT911_TAP_TIME)
             tapCount = 1;
           else
             tapCount++;
@@ -800,21 +728,12 @@ struct TouchState touchPanelRead()
   }
 
   uint8_t zero = 0;
-  if (!I2C_GT911_WriteRegister(GT911_READ_XY_REG, &zero, 1))
-  {
+  if (!I2C_GT911_WriteRegister(GT911_READ_XY_REG, &zero, 1)) {
     TRACE("GT911 ERROR: clearing XY register failed");
   }
 
   TRACE("touch event = %s", event2str(internalTouchState.event));
   return internalTouchState;
-}
-
-extern "C" void TOUCH_INT_EXTI_IRQHandler1(void)
-{
-  if (EXTI_GetITStatus(TOUCH_INT_EXTI_LINE1) != RESET) {
-    touchEventOccured = true;
-    EXTI_ClearITPendingBit(TOUCH_INT_EXTI_LINE1);
-  }
 }
 
 bool touchPanelEventOccured()

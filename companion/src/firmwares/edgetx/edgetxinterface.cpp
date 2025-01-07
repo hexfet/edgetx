@@ -1,7 +1,8 @@
 /*
- * Copyright (C) OpenTX
+ * Copyright (C) EdgeTX
  *
  * Based on code named
+ *   opentx - https://github.com/opentx/opentx
  *   th9x - http://code.google.com/p/th9x
  *   er9x - http://code.google.com/p/er9x
  *   gruvin9x - http://code.google.com/p/gruvin9x
@@ -20,11 +21,47 @@
 
 #include "edgetxinterface.h"
 
+#include "crc.h"
+#include <iostream>
+#include <string>
 #include "yaml_ops.h"
 #include "yaml_generalsettings.h"
 #include "yaml_modeldata.h"
+#include "labelvalidator.h"
 
 #include <QMessageBox>
+
+
+static uint16_t calculateChecksum(const QByteArray& data, uint16_t checksum)
+{
+  std::string fileContent = data.toStdString();
+
+  size_t startPos = 0;
+  size_t pos = 0;
+  uint8_t isCRLF = 0;
+  std::string newLine[2] =  {"\n","\r\n"};
+
+  pos = fileContent.find("\n", 0);
+  if(pos == 0) {
+    return checksum;
+  }
+
+  if(fileContent[pos-1] == '\r') {
+    isCRLF = 1;
+    qDebug() << "** File has CRLF line endings";
+  } else {
+    isCRLF = 0;
+    qDebug() << "** File has LF line endings";
+  }
+
+  // The first line contains the "checksum" value - if present. Skip it
+  if ( fileContent.find("checksum:") == 0) {
+    startPos = fileContent.find(newLine[isCRLF]) + newLine[isCRLF].length();
+  }
+
+  checksum = crc16(0, (const uint8_t *) &fileContent[startPos], fileContent.length() - startPos, checksum);
+  return checksum;
+}
 
 static YAML::Node loadYamlFromByteArray(const QByteArray& data)
 {
@@ -33,49 +70,65 @@ static YAML::Node loadYamlFromByteArray(const QByteArray& data)
     return YAML::Load(data_istream);
 }
 
-static void writeYamlToByteArray(const YAML::Node& node, QByteArray& data)
+static void writeYamlToByteArray(const YAML::Node& node, QByteArray& data, bool addChecksum = false)
 {
     // TODO: use real streaming to avoid memory copies
     std::stringstream data_ostream;
+
     data_ostream << node;
     data = QByteArray::fromStdString(data_ostream.str());
 
     qDebug() << "Saving YAML:";
-    qDebug() << data_ostream.str().c_str();
+
+    if(addChecksum) {
+      uint16_t checksum = 0xFFFF;
+      checksum = calculateChecksum(data, checksum);
+      std::stringstream checksum_ostream;
+      checksum_ostream << "checksum:  " << checksum << std::endl;
+      data.prepend(checksum_ostream.str().c_str());
+    }
+
+    qDebug() << data.toStdString().c_str();
 }
 
-bool loadModelsListFromYaml(std::vector<CategoryData>& categories,
+bool loadLabelsListFromYaml(RadioData::ModelLabels& labels,
+                            int& sortOrder,
                             EtxModelfiles& modelFiles,
                             const QByteArray& data)
 {
+  sortOrder = 0;
+  labels.clear();
   if (data.size() == 0)
     return true;
-
   YAML::Node node = loadYamlFromByteArray(data);
-  if (!node.IsSequence()) return false;
+  if (!node.IsMap()) return false; // Root Map (Labels, Sort, Models)
+  if (node["Sort"].IsScalar()) {
+    bool ok = false;
+    sortOrder = QString::fromStdString(node["Sort"].Scalar()).toUInt(&ok);
+    if (!ok)
+      sortOrder = 0;
+  }
 
-  int modelIdx = 0;
-  for (const auto& cat : node) {
-    if (!cat.IsMap()) continue;
-
-    for (const auto& cat_map : cat) {
-      categories.push_back(cat_map.first.Scalar().c_str());
-
-      const auto& models = cat_map.second;
-      if (!models.IsSequence()) continue;
-
-      for (const auto& model : models) {
-        std::string filename, name;
-        model["filename"] >> filename;
-        model["name"] >> name;
-        modelFiles.push_back(
-            {filename, name, (int)categories.size() - 1, modelIdx++});
+  YAML::Node lbls = node["Labels"];
+  if (lbls.IsMap()) {
+    for (YAML::const_iterator it=lbls.begin(); it!=lbls.end(); ++it) {
+      std::string lbl = it->first.as<std::string>();
+      RadioData::LabelData ld;
+      ld.name = QString::fromStdString(lbl);
+      YamlValidateLabel(ld.name);
+      if (!ld.name.isEmpty()) {
+        if (lbls[lbl]["selected"])
+          ld.selected = lbls[lbl]["selected"].as<bool>();
+        else
+          ld.selected = false;
+        labels.append(ld);
       }
     }
   }
 
   return true;
 }
+
 
 bool loadModelFromYaml(ModelData& model, const QByteArray& data)
 {
@@ -87,6 +140,28 @@ bool loadModelFromYaml(ModelData& model, const QByteArray& data)
 
 bool loadRadioSettingsFromYaml(GeneralSettings& settings, const QByteArray& data)
 {
+    if(data.indexOf("checksum:") == 0) {
+      int startPos = strlen("checksum:");
+      int endPos = data.indexOf("\n");
+      if (endPos > 0) {
+        while( ((const char)data[startPos] == ' ') && (startPos < data.size())) {
+          startPos++;
+        }
+        if (startPos < data.size()) {
+          QByteArray checksumStr = data.mid(startPos, endPos - startPos);
+          uint16_t fileChecksum = std::stoi(checksumStr.toStdString());
+          uint16_t calculatedChecksum = calculateChecksum(data, 0xFFFF);
+          qDebug() << "File checksum:" << fileChecksum;
+          qDebug() << "Calculated checksum:" << calculatedChecksum;
+          if (fileChecksum != calculatedChecksum) {
+            qDebug() << "File checksum mismatch! Got: " << fileChecksum << ", expected: " << calculatedChecksum;
+            QMessageBox::critical(NULL, CPN_STR_APP_NAME, QCoreApplication::translate("EdgeTXInterface", "Radio settings file checksum error. You are advised to review the settings"));
+            //return false;
+          }
+        }
+      }
+    }
+
     YAML::Node node = loadYamlFromByteArray(data);
     node >> settings;
     if (settings.version < CPN_CURRENT_SETTINGS_VERSION) {
@@ -101,46 +176,15 @@ bool loadRadioSettingsFromYaml(GeneralSettings& settings, const QByteArray& data
   return true;
 }
 
-// TODO:
-//   'modelFiles' should be ordered by Category index to avoid
-//   turning the sequence into a map.
-//
-bool writeModelsListToYaml(const std::vector<CategoryData>& categories,
-                           const EtxModelfiles& modelFiles,
-                           QByteArray& data)
+bool writeLabelsListToYaml(const RadioData &radioData, QByteArray& data)
 {
   YAML::Node node;
-  std::vector<CategoryData> cats = categories;
-  std::vector<EtxModelMetadata> files = { modelFiles.begin(), modelFiles.end() };
-
-  std::stable_sort(files.begin(), files.end(),
-                   [](const EtxModelMetadata &a, const EtxModelMetadata &b) {
-                     return a.category < b.category;
-                   });
-
-  int catIdx = 0;
-  for (const auto& cat : cats) {
-    node[catIdx++][cat.name] = YAML::Node();
+  foreach(RadioData::LabelData label, radioData.labels) {
+    node["Labels"][label.name.toStdString()] = YAML::Null;
+    if (label.selected)
+      node["Labels"][label.name.toStdString()]["selected"] = true;
   }
-
-  for (const auto& modelFile: modelFiles) {
-
-    YAML::Node cat_attrs;
-    cat_attrs["filename"] = modelFile.filename;
-    cat_attrs["name"] = modelFile.name;
-
-    catIdx = modelFile.category;
-    if (catIdx >= (int)cats.size()) {
-      catIdx = 0;
-      if (cats.size() == 0) {
-        cats.push_back("Models");
-      }
-    }
-
-    const std::string cat_name = cats[catIdx].name;
-    node[catIdx][cat_name].push_back(cat_attrs);
-  }
-
+  node["Sort"] = radioData.sortOrder;
   writeYamlToByteArray(node, data);
   return true;
 }
@@ -159,7 +203,7 @@ bool writeRadioSettingsToYaml(const GeneralSettings& settings, QByteArray& data)
   YAML::Node node;
   node = settings;
 
-  writeYamlToByteArray(node, data);
+  writeYamlToByteArray(node, data, true);
   return true;
 }
 

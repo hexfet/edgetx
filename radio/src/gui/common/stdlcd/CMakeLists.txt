@@ -1,10 +1,9 @@
-add_definitions(-DGRAPHICS)
-
 set(GUI_SRC
   ${GUI_SRC}
   ../common/stdlcd/menus.cpp
   ../common/stdlcd/draw_functions.cpp
   ../common/stdlcd/fonts.cpp
+  ../common/stdlcd/utf8.cpp
   ../common/stdlcd/popups.cpp
   ../common/stdlcd/model_inputs.cpp
   ../common/stdlcd/model_mixes.cpp
@@ -15,6 +14,9 @@ set(GUI_SRC
   ../common/stdlcd/radio_version.cpp
   ../common/stdlcd/radio_trainer.cpp
   ../common/stdlcd/view_telemetry.cpp
+  ../common/stdlcd/calibration.cpp
+  ../common/stdlcd/splash.cpp
+  ../common/stdlcd/radio_sdmanager.cpp
   model_curve_edit.cpp
   )
 
@@ -24,13 +26,6 @@ endif()
 
 if(HELI)
   set(GUI_SRC ${GUI_SRC} ../common/stdlcd/model_heli.cpp)
-endif()
-
-if(SDCARD)
-  set(GUI_SRC
-    ${GUI_SRC}
-    ../common/stdlcd/radio_sdmanager.cpp
-    )
 endif()
 
 if(PXX2)
@@ -61,3 +56,11 @@ if(PXX2)
     ../common/stdlcd/model_receiver_options.cpp
     )
 endif()
+
+if(USBJ_EX)
+  set(GUI_SRC
+    ${GUI_SRC}
+    ../common/stdlcd/model_usbjoystick.cpp
+    )
+endif()
+

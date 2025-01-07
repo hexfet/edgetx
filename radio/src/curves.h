@@ -19,8 +19,7 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _CURVES_H_
-#define _CURVES_H_
+#pragma once
 
 enum BaseCurves {
   CURVE_NONE,
@@ -47,4 +46,4 @@ int applyCustomCurve(int x, uint8_t idx);
 int applyCurve(int x, CurveRef & curve);
 int applyCurrentCurve(int x);
 
-#endif
+char *getCurveRefString(char *dest, size_t len, const CurveRef& curve);

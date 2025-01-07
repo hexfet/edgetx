@@ -19,10 +19,9 @@
  * GNU General Public License for more details.
  */
 
-#ifndef OPENTX_MULTI_H
-#define OPENTX_MULTI_H
+#pragma once
 
-#include "../timers.h"
+#include "timers_driver.h"
 
 #define MULTI_BUFFER_SIZE 177
 extern uint8_t * Multi_Buffer;
@@ -108,6 +107,7 @@ struct MultiModuleStatus {
   uint8_t flags;
   uint8_t requiresFailsafeCheck;
   uint8_t failsafeChecked;
+  uint8_t isRXProto;
   tmr10ms_t lastUpdate;
 
   uint8_t protocolPrev = 0;
@@ -118,6 +118,8 @@ struct MultiModuleStatus {
   uint8_t optionDisp = 0;
 
   void getStatusString(char * statusText) const;
+
+  uint8_t getModuleIndex() const;
 
   inline bool isValid() const { return (bool)(get_tmr10ms() - lastUpdate < 200); }
   inline bool isBufferFull() const { return (bool) (flags & 0x80); }
@@ -152,5 +154,3 @@ bool isMultiModeScanning(uint8_t module);
 bool isMultiTelemReceiving(uint8_t module);
 
 void checkFailsafeMulti();
-
-#endif //OPENTX_MULTI_H
