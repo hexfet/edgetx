@@ -7,6 +7,7 @@ from __future__ import division, print_function
 
 import sys, struct
 import argparse
+import traceback
 
 lineNumber = 0
 timeData = 0
@@ -29,6 +30,17 @@ crossfire_types = [
     "COMMAND",
     "VTX",
 ]
+
+cmd_status = [
+    "READY",
+    "START",
+    "PROGRESS",
+    "CONFIRMATION_NEEDED",
+    "CONFIRM",
+    "CANCEL",
+    "POLL",
+]
+
 
 def dump(data, maxLen=None):
     if maxLen and len(data) > maxLen:
@@ -116,9 +128,16 @@ def ParseRadioId(payload):
     return '[RadioId] subcmd 0x%02x, interval %d, correction %d' % \
             (payload[2], int.from_bytes(payload[3:7], 'big')/10, int.from_bytes(payload[7:11], 'big', signed=True)/10)
 
+def ParseLinkStatisticsRX(payload):
+    return "[RX Link Stats] rssi=%d dBm rssi=%d%% lqi=%d snr=%d dB rf_power=%d dBm" % (payload[0], payload[1], payload[2], payload[3], payload[4])
+
 def ParseCommand(payload):
     if payload[2]==0x10 and payload[3]==5:
-        return '[Command] subcmd 0x10,0x05, set ModelId, data %d' % (payload[4])
+        return '[Command] subcmd Crossfire, set ModelId, data %d' % (payload[4])
+    if payload[2]==0x0a and payload[3]==0x70:
+        return '[Command] subcmd General, Speed Proposal, port_id %d, bitrate %d' % (payload[4], int.from_bytes(payload[5:9], 'big'))
+    if payload[2]==0x0a and payload[3]==0x71:
+        return '[Command] subcmd General, Speed Response, port_id %d, %s' % (payload[4], 'accepted' if payload[5] else 'rejected')
     return '[Command] subcmd 0x%02x, datatype 0x%02x, data %d' % \
             (payload[2], payload[3], payload[4])
 
@@ -129,7 +148,7 @@ def ParseFieldRequest(payload):
     return '[Field request] device=0x%02x field=%d chunk=%d' % (payload[1], payload[2], payload[3])
 
 def ParseFieldUpdate(payload):
-    return '[Field update] device=0x%02x field=%d' % (payload[1], payload[2])
+    return '[Field update] device=0x%02x field=%d value=%s' % (payload[1], payload[2], ' '.join(f'{byte:02x}' for byte in payload[3:]))
 
 def ParseELRSInfo(payload):
     return '[ELRS info] device=0x%02x bad=%d, good=%d, flags=0x%02x, flag_str=%s' % (payload[1], payload[2],
@@ -144,18 +163,43 @@ def ParseField(payload):
         return '[Field] device=0x%02x field=%d chunk=%d' % (payload[1], payload[2], payload[3])
 
     name = ""
+    options = []
     i = 2
     try:
         while fieldBuff[i] != 0:
             name += chr(fieldBuff[i])
             i += 1
         i += 1
-        retstr = '[Field] %s device=0x%02x field=%d parent=%d type=%s' % (name, payload[1], payload[2], fieldBuff[0], crossfire_types[fieldBuff[1] & 0x7f])
+        ftype = crossfire_types[fieldBuff[1] & 0x7f]
+        retstr = '[Field] %s device=0x%02x field=%d parent=%d type=%s' % (name, payload[1], payload[2], fieldBuff[0], ftype)
+        if ftype == "TEXT_SELECTION":
+            name = ""
+            while fieldBuff[i] != 0:
+                if fieldBuff[i] == 0x3b:
+                    options.append(name)
+                    name = ""
+                    i += 1
+                    continue
+                name += chr(fieldBuff[i])
+                i += 1
+            options.append(name)
+            i += 1
+            retstr += ' selection=(%d) %s' % (fieldBuff[i], options[fieldBuff[i]])
+            retstr += ' options %s' % (", ".join(options))
+        if ftype == "INFO":
+            value = ""
+            while fieldBuff[i] != 0:
+                value += chr(fieldBuff[i])
+                i += 1
+            retstr += ' name=%s value=%s' % (name, value)
+        if ftype == "COMMAND":
+            retstr += ' status=%s, timeout=%d ms, info=%s' % (cmd_status[fieldBuff[i]], fieldBuff[i+1], ''.join(map(chr, fieldBuff[i+2:])))
         fieldBuff = []
         return retstr
     except Exception as inst:
         print(type(inst))    # the exception instance
         print(inst.args)     # arguments stored in .args
+        traceback.print_exc()
         print(inst)          # __str__ allows args to be printed directly,
 #...                          # but may be overridden in exception subclasses
         print("i: ", i)
@@ -170,6 +214,7 @@ parsers = {
     0x10: ParseVtxTelem,
     0x14: ParseLinkStatistics,
     0x16: ParseChannels,
+    0x1c: ParseLinkStatisticsRX,
     0x1E: ParseAttitude,
     0x21: ParseFlightMode,
     0x28: ParsePingDevices,
@@ -184,7 +229,7 @@ parsers = {
 }
 
 def ParsePacket(packet):
-    global timeData, prevTimeData
+    global timeData, prevTimeData, fieldBuff
     length = packet[1]
     command = packet[2]
     payload = packet[3:-1]
@@ -195,8 +240,14 @@ def ParsePacket(packet):
     timeData = 0
     if crc != crc8(packet[2:-1]):
         print(prefix, dump(packet), "[CRC error]")
+        fieldBuff = []
         return
     if args.ignore and command == 0x16:
+        return
+    if args.omit and ((command == 0x2d and payload[2] == 0x00) or \
+                      command == 0x2e):
+        return
+    if args.remove and command == 0x3a:
         return
     parser = parsers.get(command, None)
     if parser != None:
@@ -211,8 +262,8 @@ def ParseData(data):
     crossfireDataBuff += data
     # build packet for parsing
     # separate buffers for data sources so chunked data handled correctly
-    while len(crossfireDataBuff) > 4:
-        if crossfireDataBuff[0] != 0x00 and crossfireDataBuff[0] != 0xee and crossfireDataBuff[0] != 0xea:
+    while len(crossfireDataBuff) > 1:
+        if crossfireDataBuff[0] != 0xc8 and crossfireDataBuff[0] != 0x00 and crossfireDataBuff[0] != 0xee and crossfireDataBuff[0] != 0xea:
             print("Skipped 1 byte", dump(crossfireDataBuff[:1]))
             crossfireDataBuff = crossfireDataBuff[1:]
             continue
@@ -287,6 +338,10 @@ parser.add_argument('-f', '--format', default='sport',
                     help='Type of input file. bin=binary, hex=ascii hex, csv=salae async serial export, sport=s.port log')
 parser.add_argument('-i', '--ignore', action="store_true",
                     help='Ignore rc data (stick) packets')
+parser.add_argument('-o', '--omit', action="store_true",
+                    help='Ignore ELRS status request/response packets')
+parser.add_argument('-r', '--remove', action="store_true",
+                    help='Ignore RadioId CRSFshot messages')
 args = parser.parse_args()
 
 # open input
